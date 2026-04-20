@@ -1642,36 +1642,47 @@ const Dashboard = ({
   );
 };
 
-const Input = ({ label, type = "text", placeholder, required = false, value, onChange, ...props }: any) => (
-  <div className="w-full">
-    <label className="label-text">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <input
-      type={type}
-      placeholder={placeholder}
-      className="input-field"
-      value={value ?? ""}
-      onChange={onChange}
-      readOnly={!onChange && value !== undefined}
-      {...props}
-    />
-  </div>
-);
+const Input = ({ label, type = "text", placeholder, required = false, value, onChange, ...props }: any) => {
+  const isControlled = value !== undefined;
+  return (
+    <div className="w-full">
+      <label className="label-text">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type={type}
+        placeholder={placeholder}
+        className={`input-field ${props.disabled ? 'bg-slate-50 cursor-not-allowed opacity-70' : ''}`}
+        {...(isControlled ? { value: value ?? "", onChange: onChange || (() => {}) } : {})}
+        readOnly={props.readOnly || (isControlled && !onChange)}
+        required={required}
+        {...props}
+      />
+    </div>
+  );
+};
 
-const Select = ({ label, options, required = false, value, onChange, ...props }: any) => (
-  <div className="w-full">
-    <label className="label-text">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <select className="input-field" value={value ?? ""} onChange={onChange || (() => {})} {...props}>
-      <option value="">Select {label}</option>
-      {(options || []).map((opt: string) => (
-        <option key={opt} value={opt}>{opt}</option>
-      ))}
-    </select>
-  </div>
-);
+const Select = ({ label, options, required = false, value, onChange, ...props }: any) => {
+  const isControlled = value !== undefined;
+  return (
+    <div className="w-full">
+      <label className="label-text">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <select 
+        className={`input-field ${props.disabled ? 'bg-slate-50 cursor-not-allowed opacity-70' : ''}`}
+        {...(isControlled ? { value: value ?? "", onChange: onChange || (() => {}) } : {})}
+        required={required}
+        {...props}
+      >
+        <option value="">Select {label}</option>
+        {(options || []).map((opt: string) => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
 
 // --- Utils ---
 
@@ -3378,7 +3389,7 @@ const Academics = ({
         const updates = studentsInClass.map((s: any) => {
           const decision = promotionDecisions[s.id] || 'promote';
           if (decision === 'promote') {
-            return { id: s.id, class: toClass, session: nextSession };
+            return { id: s.id, class_name: toClass, academic_session: nextSession };
           }
           return null;
         }).filter(Boolean);
@@ -13101,9 +13112,42 @@ export default function App() {
 
         // Consolidated Migrations to reduce RPC calls and potential failures
         const studentMigrations = `
-          ALTER TABLE students ADD COLUMN IF NOT EXISTS session TEXT DEFAULT '2024-25';
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS academic_session TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS class_name TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS section_name TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS roll_number TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS student_type TEXT DEFAULT 'Old';
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS admission_date DATE DEFAULT CURRENT_DATE;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS disability_details TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS disability TEXT DEFAULT 'No';
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS photo_url TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS relations JSONB DEFAULT '[]'::jsonb;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS first_name TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS surname TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS title TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS caste TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS category TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS religion TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS gender TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS blood_group TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS email TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS aadhaar_number TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS pan_number TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS passport_number TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS father_name TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS mother_name TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS father_mobile TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS mother_mobile TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS father_income TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS father_source_of_income TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS mother_income TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS mother_source_of_income TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS residential_address TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS emergency_contact TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS local_guardian_contact TEXT;
+          ALTER TABLE students ADD COLUMN IF NOT EXISTS allergies TEXT;
         `;
         
         const staffMigrations = `
@@ -13130,6 +13174,14 @@ export default function App() {
           ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0;
           ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
           ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS month TEXT;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS discount_reason TEXT;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS collected_by TEXT;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS due_date DATE;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS status TEXT;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS breakdown JSONB;
         `;
 
         await supabase.rpc('exec_sql', { sql_query: studentMigrations });
@@ -14334,160 +14386,157 @@ export default function App() {
         documents: formData.documents || []
       };
 
-      if (editingStudentId) {
-        const { error } = await supabase
-          .from('students')
-          .update(payload)
-          .eq('id', editingStudentId);
-        if (error) {
-          console.error('Supabase Update Error:', error);
-          showModal('Error', `Failed to update student: ${error.message}`);
-          return;
-        }
+      // Resilient Student Save
+      let currentPayload: any = { ...payload };
+      let finalResult = null;
+      let lastError: any = null;
+      
+      if (!(window as any)._missing_student_cols) (window as any)._missing_student_cols = new Set();
+      const missing = (window as any)._missing_student_cols as Set<string>;
 
-        const updatedStudent: any = {
-          id: editingStudentId,
-          studentId: payload.student_id,
-          title: payload.title,
-          name: payload.first_name,
-          surname: payload.surname,
-          studentType: payload.student_type,
-          session: payload.academic_session,
-          class: payload.class_name,
-          section: payload.section_name,
-          rollNumber: payload.roll_number,
-          caste: payload.caste,
-          category: payload.category,
-          religion: payload.religion,
-          gender: payload.gender,
-          dob: payload.date_of_birth,
-          bloodGroup: payload.blood_group,
-          email: payload.email,
-          aadhaarNumber: payload.aadhaar_number,
-          panNumber: payload.pan_number,
-          passportNumber: payload.passport_number,
-          fatherName: payload.father_name,
-          motherName: payload.mother_name,
-          fatherMobile: payload.father_mobile,
-          motherMobile: payload.mother_mobile,
-          fatherIncome: payload.father_income,
-          fatherIncomeSource: payload.father_source_of_income,
-          motherIncome: payload.mother_income,
-          motherIncomeSource: payload.mother_source_of_income,
-          residentialAddress: payload.residential_address,
-          emergencyContact: payload.emergency_contact,
-          localGuardianContact: payload.local_guardian_contact,
-          allergy: payload.allergies,
-          hasDisability: payload.disability === 'Yes',
-          disabilityDetails: payload.disability_details || '',
-          admissionDate: payload.admission_date,
-          photo: payload.photo_url,
-          relationsInSchool: formData.relationsInSchool || [],
-          documents: formData.documents || []
-        };
-
-        setStudents(students.map(s => s.id === editingStudentId ? updatedStudent : s));
-        showModal('Success', 'Student Details Updated Successfully!');
-      } else {
-        const { data: inserted, error } = await supabase
-          .from('students')
-          .insert([payload])
-          .select();
-        if (error) {
-          console.error('Supabase Insert Error:', error);
-          showModal('Error', `Failed to register student: ${error.message}`);
-          return;
-        }
-        if (inserted) {
-          const s = inserted[0];
-          const newStudent: any = {
-            id: s.id,
-            studentId: s.student_id,
-            title: s.title,
-            name: s.first_name,
-            surname: s.surname,
-            studentType: s.student_type,
-            session: s.academic_session,
-            class: s.class_name,
-            section: s.section_name,
-            rollNumber: s.roll_number,
-            caste: s.caste,
-            category: s.category,
-            religion: s.religion,
-            gender: s.gender,
-            dob: s.date_of_birth,
-            bloodGroup: s.blood_group,
-            email: s.email,
-            aadhaarNumber: s.aadhaar_number,
-            panNumber: s.pan_number,
-            passportNumber: s.passport_number,
-            fatherName: s.father_name,
-            motherName: s.mother_name,
-            fatherMobile: s.father_mobile,
-            motherMobile: s.mother_mobile,
-            fatherIncome: s.father_income,
-            fatherIncomeSource: s.father_source_of_income,
-            motherIncome: s.mother_income,
-            motherIncomeSource: s.mother_source_of_income,
-            residentialAddress: s.residential_address,
-            emergencyContact: s.emergency_contact,
-            localGuardianContact: s.local_guardian_contact,
-            allergy: s.allergies,
-            hasDisability: s.disability === 'Yes',
-            disabilityDetails: s.disability_details || '',
-            admissionDate: s.admission_date,
-            photo: s.photo_url,
-            relationsInSchool: s.relations || [],
-            documents: s.documents || []
-          };
-          setStudents([...students, newStudent]);
-
-          // Create Student User
-          await supabase
-            .from('users')
-            .insert([{
-              id: newStudent.studentId,
-              username: newStudent.studentId,
-              name: `${newStudent.name} ${newStudent.surname}`,
-              password: formData.studentPassword || '123',
-              role: 'student',
-              permissions: []
-            }]);
-
-          // Create Parent User
-          const parentId = formData.parentId || `PAR-${newStudent.studentId}`;
-          await supabase
-            .from('users')
-            .insert([{
-              id: parentId,
-              username: parentId,
-              name: `Parent of ${newStudent.name}`,
-              password: formData.parentPassword || '123',
-              role: 'parent',
-              permissions: []
-            }]);
-
-          showModal('Success', `Student Registered Successfully! ID: ${newStudent.studentId}`);
-
-          // Update enquiry status if this was a conversion
-          if (formData.enquiryId && supabase) {
-            await supabase
-              .from('enquiries')
-              .update({ status: 'Converted' })
-              .eq('id', formData.enquiryId);
-            
-            setAdmissionEnquiries(admissionEnquiries.map((e: AdmissionEnquiry) => 
-              e.id === formData.enquiryId ? { ...e, status: 'Converted' } : e
-            ));
+      for (let attempt = 0; attempt < 10; attempt++) {
+        // Remove currently known missing columns
+        Object.keys(currentPayload).forEach(k => { if (missing.has(k)) delete currentPayload[k]; });
+        
+        try {
+          const req = editingStudentId 
+            ? supabase.from('students').update(currentPayload).eq('id', editingStudentId).select()
+            : supabase.from('students').insert([currentPayload]).select();
+          
+          const { data, error } = await req;
+          
+          if (error) {
+            lastError = error;
+            // Only retry if it's a column missing error
+            if (error.code === 'PGRST204' || error.message.toLowerCase().includes('column') || error.message.toLowerCase().includes('does not exist')) {
+              const m = error.message.match(/column "(.*?)"/i) || error.message.match(/column (.*?) /i);
+              if (m && m[1]) {
+                missing.add(m[1]);
+                continue;
+              }
+            }
+            // For other database errors (e.g. constraints), re-throw immediately
+            throw error;
+          }
+          
+          if (data && data.length > 0) {
+            finalResult = data[0];
+            break;
+          } else if (editingStudentId) {
+             // In update mode, data being empty means the ID wasn't found
+             throw new Error(`Student record with ID ${editingStudentId} not found.`);
+          } else {
+             // In insert mode, data being empty is extremely weird if no error
+             throw new Error('Insert completed but no data was returned from the database.');
+          }
+        } catch (e: any) {
+          lastError = e;
+          // If it was a column error, the 'continue' above handles it.
+          // If we are here, it's either the last retry or a non-column error that was thrown.
+          if (!e.message?.toLowerCase().includes('column') && !e.message?.toLowerCase().includes('does not exist')) {
+            throw e;
           }
         }
       }
+
+      if (!finalResult) {
+        throw new Error(lastError?.message || 'Save operation failed after multiple retries.');
+      }
+      
+      const s = finalResult;
+      const studentObj: any = {
+        id: s.id,
+        studentId: s.student_id,
+        title: s.title,
+        name: s.first_name,
+        surname: s.surname,
+        studentType: s.student_type,
+        session: s.academic_session,
+        class: s.class_name,
+        section: s.section_name,
+        rollNumber: s.roll_number,
+        caste: s.caste,
+        category: s.category,
+        religion: s.religion,
+        gender: s.gender,
+        dob: s.date_of_birth,
+        bloodGroup: s.blood_group,
+        email: s.email,
+        aadhaarNumber: s.aadhaar_number,
+        panNumber: s.pan_number,
+        passportNumber: s.passport_number,
+        fatherName: s.father_name,
+        motherName: s.mother_name,
+        fatherMobile: s.father_mobile,
+        motherMobile: s.mother_mobile,
+        fatherIncome: s.father_income,
+        fatherIncomeSource: s.father_source_of_income,
+        motherIncome: s.mother_income,
+        motherIncomeSource: s.mother_source_of_income,
+        residentialAddress: s.residential_address,
+        emergencyContact: s.emergency_contact,
+        localGuardianContact: s.local_guardian_contact,
+        allergy: s.allergies,
+        hasDisability: s.disability === 'Yes',
+        disabilityDetails: s.disability_details || '',
+        admissionDate: s.admission_date,
+        photo: s.photo_url,
+        relationsInSchool: s.relations || [],
+        documents: s.documents || []
+      };
+
+      if (editingStudentId) {
+        setStudents(students.map(st => st.id === editingStudentId ? studentObj : st));
+        showModal('Success', 'Student Details Updated Successfully!');
+      } else {
+        setStudents([studentObj, ...students]);
+        
+        // Create Student User
+        await supabase
+          .from('users')
+          .insert([{
+            id: studentObj.studentId,
+            username: studentObj.studentId,
+            name: `${studentObj.name} ${studentObj.surname}`,
+            password: formData.studentPassword || '123',
+            role: 'student',
+            permissions: []
+          }]);
+
+        // Create Parent User
+        const parentId = formData.parentId || `PAR-${studentObj.studentId}`;
+        await supabase
+          .from('users')
+          .insert([{
+            id: parentId,
+            username: parentId,
+            name: `Parent of ${studentObj.name}`,
+            password: formData.parentPassword || '123',
+            role: 'parent',
+            permissions: []
+          }]);
+
+        showModal('Success', `Student Registered Successfully! ID: ${studentObj.studentId}`);
+      }
+
+      // Update enquiry status if this was a conversion
+      if (formData.enquiryId && supabase) {
+        await supabase
+          .from('enquiries')
+          .update({ status: 'Converted' })
+          .eq('id', formData.enquiryId);
+        
+        setAdmissionEnquiries(admissionEnquiries.map((e: AdmissionEnquiry) => 
+          e.id === formData.enquiryId ? { ...e, status: 'Converted' } : e
+        ));
+      }
+
       setEditingStudentId(null);
       setFormData({});
       setView('student-list');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving student:', err);
-      showModal('Error', 'Failed to save student details.');
+      showModal('Error', `Failed to save student details: ${err.message || 'Unknown error'}`);
     }
   };
 

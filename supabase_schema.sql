@@ -21,6 +21,10 @@ BEGIN
     ELSE
         -- For other commands, we just execute and return a success status
         EXECUTE sql_query;
+        
+        -- Trigger schema cache reload for PostgREST
+        NOTIFY pgrst, 'reload schema';
+        
         RETURN jsonb_build_object('status', 'success');
     END IF;
 EXCEPTION WHEN OTHERS THEN
@@ -746,4 +750,12 @@ ADD COLUMN IF NOT EXISTS designation TEXT;
 ALTER TABLE fee_collections
 ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0;
+ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS month TEXT,
+ADD COLUMN IF NOT EXISTS discount_reason TEXT,
+ADD COLUMN IF NOT EXISTS transaction_id TEXT,
+ADD COLUMN IF NOT EXISTS invoice_number TEXT,
+ADD COLUMN IF NOT EXISTS collected_by TEXT,
+ADD COLUMN IF NOT EXISTS due_date DATE,
+ADD COLUMN IF NOT EXISTS status TEXT,
+ADD COLUMN IF NOT EXISTS breakdown JSONB;
