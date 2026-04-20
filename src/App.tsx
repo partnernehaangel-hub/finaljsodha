@@ -13126,8 +13126,15 @@ export default function App() {
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS designation TEXT;
         `;
 
+        const feeMigrations = `
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
+          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0;
+        `;
+
         await supabase.rpc('exec_sql', { sql_query: studentMigrations });
         await supabase.rpc('exec_sql', { sql_query: staffMigrations });
+        await supabase.rpc('exec_sql', { sql_query: feeMigrations });
         
       } catch (err) {
         console.warn('Migration error (might be expected if exec_sql is missing or schema is up to date):', err);
