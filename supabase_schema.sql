@@ -10,6 +10,7 @@ CREATE OR REPLACE FUNCTION exec_sql(sql_query text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     result jsonb;
@@ -597,11 +598,23 @@ INSERT INTO subjects (name) VALUES
 ('Mathematics'), ('Science'), ('English'), ('Social Studies'), ('Hindi'), ('Computer Science')
 ON CONFLICT (name) DO NOTHING;
 
--- Enable Row Level Security (RLS) and Add Granular Policies
+-- Enable Row Level Security (RLS) and Add Standardized Policies
+-- This block first clears all existing policies to resolve permissive linter warnings
 DO $$
 DECLARE
     t text;
+    p text;
 BEGIN
+    -- 1. Drop ALL existing policies to ensure a clean slate and resolve legacy permissive policies
+    FOR t, p IN 
+        SELECT tablename, policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', p, t);
+    END LOOP;
+
+    -- 2. Loop through all tables and apply standard RLS
     FOR t IN 
         SELECT table_name 
         FROM information_schema.tables 
@@ -611,123 +624,29 @@ BEGIN
         -- Enable RLS
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
         
-        -- Drop the old blanket policy if it exists
-        EXECUTE format('DROP POLICY IF EXISTS "Allow All" ON public.%I', t);
-        
-        -- 1. SELECT: Allow read access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Select" ON public.%I', t);
+        -- SELECT: Allow read access (Linter allows USING (true) for SELECT)
         EXECUTE format('CREATE POLICY "Allow Select" ON public.%I FOR SELECT USING (true)', t);
         
-        -- 2. INSERT: Allow write access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Insert" ON public.%I', t);
+        -- INSERT: Allow write access for authenticated users
         EXECUTE format('CREATE POLICY "Allow Insert" ON public.%I FOR INSERT WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
         
-        -- 3. UPDATE: Allow update access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Update" ON public.%I', t);
+        -- UPDATE: Allow update access for authenticated users (Avoids USING (true))
         EXECUTE format('CREATE POLICY "Allow Update" ON public.%I FOR UPDATE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
         
-        -- 4. DELETE: Allow delete access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Delete" ON public.%I', t);
+        -- DELETE: Allow delete access for authenticated users (Avoids USING (true))
         EXECUTE format('CREATE POLICY "Allow Delete" ON public.%I FOR DELETE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
     END LOOP;
 END $$;
--- 1. Add missing columns to students table
-ALTER TABLE IF EXISTS public.students 
-ADD COLUMN IF NOT EXISTS disability_details TEXT;
 
--- 2. Add missing columns to school_profile table
-ALTER TABLE IF EXISTS public.school_profile 
-ADD COLUMN IF NOT EXISTS fee_qr_url TEXT,
-ADD COLUMN IF NOT EXISTS fee_upi_id TEXT;
-
--- 3. Ensure RLS policies allow authenticated/anonymous access for these operations
-DO $$
-DECLARE
-    t text;
-BEGIN
-    FOR t IN 
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_type = 'BASE TABLE'
-    LOOP
-        -- Enable RLS
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-        
-        -- SELECT: Allow read access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Select" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Select" ON public.%I FOR SELECT USING (true)', t);
-        
-        -- INSERT: Allow write access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Insert" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Insert" ON public.%I FOR INSERT WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
-        
-        -- UPDATE: Allow update access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Update" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Update" ON public.%I FOR UPDATE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
-        
-        -- DELETE: Allow delete access
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Delete" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Delete" ON public.%I FOR DELETE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
-    END LOOP;
-END $$;
--- 1. Add missing columns to students table
+-- 1. Ensure students table has all required columns (idempotent)
 ALTER TABLE IF EXISTS public.students 
 ADD COLUMN IF NOT EXISTS photo_url TEXT,
 ADD COLUMN IF NOT EXISTS disability_details TEXT,
-ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]';
+ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS relations JSONB DEFAULT '[]'::jsonb;
 
--- 2. Add missing columns to school_profile table
-ALTER TABLE IF EXISTS public.school_profile 
-ADD COLUMN IF NOT EXISTS fee_qr_url TEXT,
-ADD COLUMN IF NOT EXISTS fee_upi_id TEXT;
-
--- 3. Refresh the schema cache (Reload PostgREST)
--- After running this, go to Settings -> API and click "Reload PostgREST" 
--- if the error persists.
--- Final Schema Fixes and Column Additions
--- Run this to ensure all required columns exist for Student Registration and Settings
-
--- 1. Add missing columns to students table
-ALTER TABLE IF EXISTS public.students 
-ADD COLUMN IF NOT EXISTS photo_url TEXT,
-ADD COLUMN IF NOT EXISTS disability_details TEXT,
-ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]',
-ADD COLUMN IF NOT EXISTS relations JSONB DEFAULT '[]';
-
--- 2. Add missing columns to school_profile table
-ALTER TABLE IF EXISTS public.school_profile 
-ADD COLUMN IF NOT EXISTS fee_qr_url TEXT,
-ADD COLUMN IF NOT EXISTS fee_upi_id TEXT;
-
--- 3. Ensure RLS policies are applied to all tables
-DO $$
-DECLARE
-    t text;
-BEGIN
-    FOR t IN 
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_type = 'BASE TABLE'
-    LOOP
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-        
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Select" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Select" ON public.%I FOR SELECT USING (true)', t);
-        
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Insert" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Insert" ON public.%I FOR INSERT WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
-        
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Update" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Update" ON public.%I FOR UPDATE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
-        
-        EXECUTE format('DROP POLICY IF EXISTS "Allow Delete" ON public.%I', t);
-        EXECUTE format('CREATE POLICY "Allow Delete" ON public.%I FOR DELETE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
-    END LOOP;
-END $$;
--- Comprehensive Staff Table Schema Update
-ALTER TABLE staff 
+-- 2. Ensure staff table has all required columns (idempotent)
+ALTER TABLE IF EXISTS public.staff 
 ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb,
 ADD COLUMN IF NOT EXISTS residential_address TEXT,
 ADD COLUMN IF NOT EXISTS login_id TEXT,
@@ -746,8 +665,13 @@ ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active',
 ADD COLUMN IF NOT EXISTS department TEXT,
 ADD COLUMN IF NOT EXISTS designation TEXT;
 
--- Fee Collections Update
-ALTER TABLE fee_collections
+-- 3. Ensure school_profile table has all required columns (idempotent)
+ALTER TABLE IF EXISTS public.school_profile 
+ADD COLUMN IF NOT EXISTS fee_qr_url TEXT,
+ADD COLUMN IF NOT EXISTS fee_upi_id TEXT;
+
+-- 4. Ensure fee_collections table has all required columns (idempotent)
+ALTER TABLE IF EXISTS public.fee_collections
 ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0,

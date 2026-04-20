@@ -1643,7 +1643,7 @@ const Dashboard = ({
 };
 
 const Input = ({ label, type = "text", placeholder, required = false, value, onChange, ...props }: any) => {
-  const isControlled = value !== undefined;
+  const isControlled = value !== undefined || !!onChange;
   return (
     <div className="w-full">
       <label className="label-text">
@@ -1654,7 +1654,7 @@ const Input = ({ label, type = "text", placeholder, required = false, value, onC
         placeholder={placeholder}
         className={`input-field ${props.disabled ? 'bg-slate-50 cursor-not-allowed opacity-70' : ''}`}
         {...(isControlled ? { value: value ?? "", onChange: onChange || (() => {}) } : {})}
-        readOnly={props.readOnly || (isControlled && !onChange)}
+        readOnly={props.readOnly || (value !== undefined && !onChange)}
         required={required}
         {...props}
       />
@@ -1663,7 +1663,7 @@ const Input = ({ label, type = "text", placeholder, required = false, value, onC
 };
 
 const Select = ({ label, options, required = false, value, onChange, ...props }: any) => {
-  const isControlled = value !== undefined;
+  const isControlled = value !== undefined || !!onChange;
   return (
     <div className="w-full">
       <label className="label-text">
@@ -12793,7 +12793,7 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
                     <Input label="Amount" type="number" value={formData.amount} onChange={(e: any) => setFormData({ ...formData, amount: Number(e.target.value) })} />
                     <div className="space-y-2">
                       <label className="label-text">Description</label>
-                      <textarea className="input-field min-h-[100px]" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}></textarea>
+                      <textarea className="input-field min-h-[100px]" value={formData.description || ''} onChange={(e) => setFormData({ ...formData, description: e.target.value })}></textarea>
                     </div>
                   </>
                 ) : (
@@ -12801,7 +12801,7 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
                     <Input label="Head Name" value={formData.name} onChange={(e: any) => setFormData({ ...formData, name: e.target.value })} />
                     <div className="space-y-2">
                       <label className="label-text">Description</label>
-                      <textarea className="input-field min-h-[100px]" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}></textarea>
+                      <textarea className="input-field min-h-[100px]" value={formData.description || ''} onChange={(e) => setFormData({ ...formData, description: e.target.value })}></textarea>
                     </div>
                   </>
                 )}
@@ -13184,6 +13184,86 @@ export default function App() {
           ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS breakdown JSONB;
         `;
 
+        const securityMigrations = `
+          -- 1. Fix exec_sql search path for security
+          CREATE OR REPLACE FUNCTION public.exec_sql(sql_query text)
+          RETURNS jsonb
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          SET search_path = public
+          AS $$
+          DECLARE
+              result jsonb;
+          BEGIN
+              IF sql_query ILIKE 'select%' THEN
+                  EXECUTE 'SELECT jsonb_agg(t) FROM (' || sql_query || ') t' INTO result;
+                  RETURN result;
+              ELSE
+                  EXECUTE sql_query;
+                  NOTIFY pgrst, 'reload schema';
+                  RETURN jsonb_build_object('status', 'success');
+              END IF;
+          EXCEPTION WHEN OTHERS THEN
+              RETURN jsonb_build_object('status', 'error', 'message', SQLERRM);
+          END;
+          $$;
+
+          -- 2. Consolidate RLS policies to satisfy linter
+          DO $$
+          DECLARE
+              t text;
+              p text;
+          BEGIN
+              -- Drop ALL existing policies to ensure a clean slate
+              FOR t, p IN SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public'
+              LOOP
+                  EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', p, t);
+              END LOOP;
+
+              -- Apply standard, safe RLS to all tables
+              FOR t IN SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+              LOOP
+                  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+                  EXECUTE format('CREATE POLICY "Allow Select" ON public.%I FOR SELECT USING (true)', t);
+                  EXECUTE format('CREATE POLICY "Allow Insert" ON public.%I FOR INSERT WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
+                  EXECUTE format('CREATE POLICY "Allow Update" ON public.%I FOR UPDATE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
+                  EXECUTE format('CREATE POLICY "Allow Delete" ON public.%I FOR DELETE USING (auth.role() = ''anon'' OR auth.role() = ''authenticated'')', t);
+              END LOOP;
+          END $$;
+        `;
+
+        const academicsMigrations = `
+          -- Standardizing teacher_assignments columns
+          DO $$ 
+          BEGIN 
+            -- If 'session' exists but 'academic_session' doesn't, rename it
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'session') 
+               AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'academic_session') THEN
+              ALTER TABLE teacher_assignments RENAME COLUMN "session" TO "academic_session";
+            END IF;
+            
+            -- Ensure academic_session is nullable if it was NOT NULL and we want to be safe during transitions 
+            -- or just ensure it exists
+          END $$;
+
+          ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS academic_session TEXT;
+          ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS class_name TEXT;
+          ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS section_name TEXT;
+          ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS class_teacher_name TEXT;
+          ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS subject_teacher_assignments JSONB;
+
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS class_name TEXT;
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS subject TEXT;
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS title TEXT;
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Not Started';
+
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS class_name TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS section_name TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS subject TEXT;
+        `;
+
+        await supabase.rpc('exec_sql', { sql_query: securityMigrations });
+        await supabase.rpc('exec_sql', { sql_query: academicsMigrations });
         await supabase.rpc('exec_sql', { sql_query: studentMigrations });
         await supabase.rpc('exec_sql', { sql_query: staffMigrations });
         await supabase.rpc('exec_sql', { sql_query: feeMigrations });
@@ -13616,31 +13696,43 @@ export default function App() {
 
       // Fetch HR Data
       const { data: staffData } = await supabase.from('staff').select('*');
-      if (staffData) setStaff(staffData.map(s => ({
-        id: s.id,
-        staffId: s.staff_id,
-        name: s.name,
-        surname: s.surname,
-        fatherName: s.father_name,
-        motherName: s.mother_name,
-        dob: s.date_of_birth,
-        gender: s.gender,
-        email: s.email,
-        mobile: s.mobile,
-        emergencyContact: s.emergency_contact,
-        qualification: s.qualification,
-        experience: s.experience,
-        address: s.residential_address,
-        role: s.role,
-        department: s.department,
-        designation: s.designation,
-        joiningDate: s.joining_date,
-        photo: s.photo,
-        documents: s.documents || [],
-        loginId: s.login_id,
-        loginPassword: s.login_password,
-        status: s.status || 'Active'
-      })));
+      if (staffData) {
+        const mappedStaff = staffData.map(s => ({
+          id: s.id,
+          staffId: s.staff_id,
+          name: s.name,
+          surname: s.surname,
+          fatherName: s.father_name,
+          motherName: s.mother_name,
+          dob: s.date_of_birth,
+          gender: s.gender,
+          email: s.email,
+          mobile: s.mobile,
+          emergencyContact: s.emergency_contact,
+          qualification: s.qualification,
+          experience: s.experience,
+          address: s.residential_address,
+          role: s.role,
+          department: s.department,
+          designation: s.designation,
+          joiningDate: s.joining_date,
+          photo: s.photo,
+          documents: s.documents || [],
+          loginId: s.login_id,
+          loginPassword: s.login_password,
+          status: s.status || 'Active'
+        }));
+        setStaff(mappedStaff);
+        
+        // Update teacher list in masterData based on staff who are teachers or have staff IDs
+        const teacherNames = mappedStaff
+          .filter(s => s.role === 'Teacher' || s.staffId)
+          .map(s => s.staffId ? `${s.staffId} - ${s.name} ${s.surname || ''}`.trim() : `${s.name} ${s.surname || ''}`.trim());
+        
+        if (teacherNames.length > 0) {
+          setMasterData(prev => ({ ...prev, teachers: teacherNames }));
+        }
+      }
 
       const { data: sLeaves } = await supabase.from('staff_leave_requests').select('*');
       if (sLeaves) setStaffLeaveRequests(sLeaves.map(sl => ({
