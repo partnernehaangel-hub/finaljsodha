@@ -121,7 +121,7 @@ type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'setti
 interface User {
   id: string;
   name: string;
-  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden' | 'super-admin';
+  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden' | 'staff' | 'super-admin';
   permissions: string[];
   studentId?: string;
   password?: string;
@@ -235,7 +235,7 @@ interface Notification {
   message: string;
   date: string;
   type: 'Info' | 'Warning' | 'Success' | 'Fee';
-  targetRoles: ('admin' | 'teacher' | 'student' | 'parent')[];
+  targetRoles: ('admin' | 'teacher' | 'student' | 'parent' | 'staff' | 'warden')[];
   targetStudentId?: string;
   isRead?: boolean;
 }
@@ -597,7 +597,7 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
       {/* Student Info */}
       <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
         <div className="space-y-1">
-          <p><span className="font-bold uppercase w-24 inline-block">Name:</span> <span className="border-b border-slate-400 px-2">{student.name} {student.surname}</span></p>
+          <p><span className="font-bold uppercase w-24 inline-block">Name:</span> <span className="border-b border-slate-400 px-2">{student.name || ''} {student.surname || ''}</span></p>
           <p><span className="font-bold uppercase w-24 inline-block">Class:</span> <span className="border-b border-slate-400 px-2">{student.class}</span></p>
         </div>
         <div className="space-y-1 text-right">
@@ -611,16 +611,16 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
           <thead>
             <tr>
               <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Subject</th>
-              {template.terms.map(term => (
-                <th key={term.id} colSpan={term.subColumns.length + 1} className="border-2 border-slate-900 p-1 bg-slate-50">{term.name}</th>
+              {(template.terms || []).map((term: any) => (
+                <th key={term.id} colSpan={(term.subColumns || []).length + 1} className="border-2 border-slate-900 p-1 bg-slate-50">{term.name}</th>
               ))}
               <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Total</th>
               <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Grade</th>
             </tr>
             <tr>
-              {template.terms.map(term => (
+              {(template.terms || []).map((term: any) => (
                 <React.Fragment key={term.id}>
-                  {term.subColumns.map(col => (
+                  {(term.subColumns || []).map((col: any) => (
                     <th key={col.id} className="border-2 border-slate-900 p-1 font-normal">{col.name}</th>
                   ))}
                   <th className="border-2 border-slate-900 p-1 font-bold">TOTAL</th>
@@ -629,16 +629,16 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
             </tr>
           </thead>
           <tbody>
-            {template.subjects.map(subject => {
+            {(template.subjects || []).map((subject: any) => {
               let grandTotal = 0;
               return (
                 <tr key={subject}>
                   <td className="border-2 border-slate-900 p-2 font-bold">{subject}</td>
-                  {template.terms.map(term => {
+                  {(template.terms || []).map((term: any) => {
                     let termTotal = 0;
                     return (
                       <React.Fragment key={term.id}>
-                        {term.subColumns.map(col => {
+                        {(term.subColumns || []).map((col: any) => {
                           const val = reportCard?.termData?.[term.id]?.subjects?.[subject]?.[col.id] || 0;
                           termTotal += Number(val);
                           return <td key={col.id} className="border-2 border-slate-900 p-1 text-center">{val || '-'}</td>;
@@ -665,7 +665,7 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
       <div className="grid grid-cols-3 gap-8 text-xs mb-8">
         <div className="border-2 border-slate-900 p-4 space-y-2">
           <p className="font-bold uppercase border-b border-slate-900 pb-1">Attendance</p>
-          {template.terms.map(term => (
+          {(template.terms || []).map((term: any) => (
             <p key={term.id} className="flex justify-between">
               <span>{term.name}:</span>
               <span className="font-bold">{reportCard?.termData?.[term.id]?.attendance || '-'}</span>
@@ -703,8 +703,8 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
 const ReportCardEditor = ({ student, template, reportCard: existingReport, onClose, onSave }: any) => {
   const [formData, setFormData] = useState<ReportCard>(existingReport || {
     id: Date.now().toString(),
-    studentId: student.id,
-    templateId: template.id,
+    studentId: student?.studentId || '',
+    templateId: template?.id || '',
     termData: {},
     result: '',
     aggregate: '',
@@ -714,6 +714,17 @@ const ReportCardEditor = ({ student, template, reportCard: existingReport, onClo
     promotionStatus: 'Pass/Promoted',
     isPublished: false
   });
+
+  if (!template) {
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl text-center">
+          <p className="text-red-500 font-bold mb-4">No template found for this report card.</p>
+          <button onClick={onClose} className="btn-primary px-6">Close</button>
+        </div>
+      </div>
+    );
+  }
 
   const handleCellChange = (termId: string, subject: string, colId: string, value: string) => {
     setFormData(prev => ({
@@ -757,7 +768,7 @@ const ReportCardEditor = ({ student, template, reportCard: existingReport, onClo
         {/* Header */}
         <div className="p-6 bg-white border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold">Report Card Editor: {student.name} {student.surname}</h2>
+            <h2 className="text-xl font-bold">Report Card Editor: {student.name || ''} {student.surname || ''}</h2>
             <p className="text-sm text-text-sub">Template: {template.name}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-all">
@@ -770,7 +781,7 @@ const ReportCardEditor = ({ student, template, reportCard: existingReport, onClo
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Form Side */}
             <div className="space-y-8">
-              {template.terms.map(term => (
+              {(template.terms || []).map((term: any) => (
                 <div key={term.id} className="space-y-4">
                   <h3 className="font-bold text-primary flex items-center gap-2">
                     <Calendar size={18} /> {term.name}
@@ -780,16 +791,16 @@ const ReportCardEditor = ({ student, template, reportCard: existingReport, onClo
                       <thead>
                         <tr>
                           <th className="p-2 text-left bg-slate-100 border border-slate-200">Subject</th>
-                          {term.subColumns.map(col => (
+                          {(term.subColumns || []).map((col: any) => (
                             <th key={col.id} className="p-2 text-center bg-slate-100 border border-slate-200">{col.name}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {template.subjects.map(subject => (
+                        {(template.subjects || []).map((subject: any) => (
                           <tr key={subject}>
                             <td className="p-2 border border-slate-200 font-medium">{subject}</td>
-                            {term.subColumns.map(col => (
+                            {(term.subColumns || []).map((col: any) => (
                               <td key={col.id} className="p-1 border border-slate-200">
                                 <input 
                                   type="number"
@@ -962,11 +973,12 @@ const Dashboard = ({
   teacherAssignments,
   homeworks,
   leaveRequests,
-  getStudentDueFees
+  getStudentDueFees,
+  notices
 }: any) => {
   const isSuperAdmin = currentUser?.role === 'super-admin';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
-  const isTeacher = currentUser?.role === 'teacher';
+  const isTeacher = currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden';
   const isStudent = currentUser?.role === 'student' || currentUser?.role === 'parent';
 
   const today = getTodayDate();
@@ -974,9 +986,9 @@ const Dashboard = ({
   const teachersPresent = staffAttendance.filter((a: any) => (a.date === today || a.date === formatDate(today)) && a.status === 'Present').length;
 
   // Teacher Dashboard Helpers
-  const myAssignedClasses = isTeacher ? teacherAssignments.filter((a: any) => 
+  const myAssignedClasses = isTeacher ? (teacherAssignments || []).filter((a: any) => 
     a.classTeacher === currentUser?.name || 
-    a.subjectTeachers.some((st: any) => st.teacher === currentUser?.name)
+    (a.subjectTeachers && Array.isArray(a.subjectTeachers) && a.subjectTeachers.some((st: any) => st.teacher === currentUser?.name))
   ) : [];
 
   const totalMyStudents = isTeacher ? students.filter((s: any) => 
@@ -986,21 +998,21 @@ const Dashboard = ({
   const todayAttendanceCount = isTeacher ? attendance.filter((a: any) => 
     (a.date === today || a.date === formatDate(today)) && 
     a.status === 'Present' &&
-    myAssignedClasses.some((ac: any) => ac.class === a.class && ac.section === a.section)
+    (myAssignedClasses.length > 0 ? myAssignedClasses.some((ac: any) => ac.class === a.class && ac.section === a.section) : false)
   ).length : 0;
 
   const pendingHomeworkCount = isTeacher ? homeworks.filter((h: any) => 
-    myAssignedClasses.some((ac: any) => ac.class === h.class && ac.section === h.section) &&
+    (myAssignedClasses.length > 0 && myAssignedClasses.some((ac: any) => ac.class === h.class && ac.section === h.section)) &&
     new Date(h.dueDate) >= new Date()
   ).length : 0;
 
   const myPendingLeaves = isTeacher ? leaveRequests.filter((l: any) => 
     l.status === 'Pending' &&
-    myAssignedClasses.some((ac: any) => ac.class === l.class && ac.section === l.section)
+    (myAssignedClasses.length > 0 && myAssignedClasses.some((ac: any) => ac.class === l.class && ac.section === l.section))
   ).length : 0;
 
   const myUpcomingExams = isTeacher ? examSchedules.filter((s: any) => 
-    myAssignedClasses.some((ac: any) => ac.class === s.class && ac.section === s.section) &&
+    (myAssignedClasses.length > 0 && myAssignedClasses.some((ac: any) => ac.class === s.class && ac.section === s.section)) &&
     new Date(s.date) >= new Date()
   ).length : 0;
 
@@ -1031,6 +1043,8 @@ const Dashboard = ({
       exit={{ opacity: 0, y: -20 }}
       className="space-y-8"
     >
+      <NoticeTicker notices={notices.filter(n => n.targetRoles?.includes(currentUser.role))} />
+
       {/* Admin/Super Admin View */}
       {(isSuperAdmin || isAdmin) && (
         <>
@@ -1287,24 +1301,34 @@ const Dashboard = ({
                   Notice Board
                 </h3>
                 <div className="space-y-6 relative z-10">
-                  {[
-                    { date: '15 Mar', title: 'Annual Sports Day', desc: 'Sports day starts from next Monday' },
-                    { date: '12 Mar', title: 'Parent-Teacher Meeting', desc: 'PTM for all classes this Saturday' },
-                    { date: '10 Mar', title: 'Holi Vacation', desc: 'School closed from 24th to 26th March' }
-                  ].map((notice, i) => (
-                    <div key={i} className="flex gap-4 group cursor-pointer">
-                      <div className="shrink-0 w-12 h-12 bg-white/20 rounded-2xl flex flex-col items-center justify-center group-hover:bg-white group-hover:text-primary transition-all">
-                        <span className="text-[10px] font-black uppercase leading-none">{notice.date.split(' ')[1]}</span>
-                        <span className="text-lg font-black leading-none">{notice.date.split(' ')[0]}</span>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-black uppercase tracking-tighter group-hover:translate-x-1 transition-transform">{notice.title}</h4>
-                        <p className="text-[10px] text-white/70 font-bold">{notice.desc}</p>
-                      </div>
-                    </div>
-                  ))}
+                  {notices.length === 0 ? (
+                    <p className="text-center py-8 text-white/50 text-xs italic">No notices posted yet</p>
+                  ) : (
+                    notices.slice(0, 3).map((notice, i) => {
+                      const dateParts = notice.date ? notice.date.split('-') : ['--', '--', '--']; // Expected YYYY-MM-DD
+                      const day = dateParts[2] || '--';
+                      const monthNum = parseInt(dateParts[1]) || 0;
+                      const month = monthNames[monthNum - 1]?.slice(0, 3) || '--';
+
+                      return (
+                        <div key={notice.id || i} className="flex gap-4 group cursor-pointer">
+                          <div className="shrink-0 w-12 h-12 bg-white/20 rounded-2xl flex flex-col items-center justify-center group-hover:bg-white group-hover:text-primary transition-all">
+                            <span className="text-[10px] font-black uppercase leading-none">{month}</span>
+                            <span className="text-lg font-black leading-none">{day}</span>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-tighter group-hover:translate-x-1 transition-transform">{notice.title}</h4>
+                            <p className="text-[10px] text-white/70 font-bold line-clamp-2">{notice.message}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                <button className="w-full mt-8 py-3 bg-white/20 hover:bg-white hover:text-primary rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                <button 
+                  onClick={() => setView('communicate')}
+                  className="w-full mt-8 py-3 bg-white/20 hover:bg-white hover:text-primary rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
                   View All Notices
                 </button>
               </Card>
@@ -1463,10 +1487,16 @@ const Dashboard = ({
                 Notices
               </h3>
               <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <h4 className="text-sm font-black text-blue-900 uppercase tracking-tighter">Staff Meeting</h4>
-                  <p className="text-xs text-blue-700 font-bold mt-1">Today at 3:30 PM in Conference Hall</p>
-                </div>
+                {notices.filter(n => n.targetRoles?.includes(currentUser.role)).length === 0 ? (
+                  <p className="text-center py-8 text-text-sub text-xs italic">No notices for you</p>
+                ) : (
+                  notices.filter(n => n.targetRoles?.includes(currentUser.role)).slice(0, 3).map((notice, i) => (
+                    <div key={notice.id || i} className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                      <h4 className="text-sm font-black text-blue-900 uppercase tracking-tighter">{notice.title}</h4>
+                      <p className="text-xs text-blue-700 font-bold mt-1">{notice.message}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </Card>
           </div>
@@ -1628,10 +1658,16 @@ const Dashboard = ({
                 Notices
               </h3>
               <div className="space-y-4">
-                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                  <h4 className="text-sm font-black text-amber-900 uppercase tracking-tighter">Holiday Notice</h4>
-                  <p className="text-xs text-amber-700 font-bold mt-1">School closed on 14th April for Ambedkar Jayanti</p>
-                </div>
+                {notices.filter(n => n.targetRoles?.includes(currentUser.role)).length === 0 ? (
+                  <p className="text-center py-8 text-text-sub text-xs italic">No new notices for you</p>
+                ) : (
+                  notices.filter(n => n.targetRoles?.includes(currentUser.role)).slice(0, 3).map((notice, i) => (
+                    <div key={notice.id || i} className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                      <h4 className="text-sm font-black text-amber-900 uppercase tracking-tighter">{notice.title}</h4>
+                      <p className="text-xs text-amber-700 font-bold mt-1">{notice.message}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </Card>
           </div>
@@ -1641,6 +1677,11 @@ const Dashboard = ({
   </motion.div>
   );
 };
+
+const monthNames = [
+  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+];
 
 const Input = ({ label, type = "text", placeholder, required = false, value, onChange, ...props }: any) => {
   const isControlled = value !== undefined || !!onChange;
@@ -1658,6 +1699,45 @@ const Input = ({ label, type = "text", placeholder, required = false, value, onC
         required={required}
         {...props}
       />
+    </div>
+  );
+};
+
+const NoticeTicker = ({ notices }: { notices: any[] }) => {
+  if (!notices || notices.length === 0) return null;
+  
+  return (
+    <div className="bg-slate-900 overflow-hidden py-3 border-y border-slate-800 shadow-lg relative z-20">
+      <div className="whitespace-nowrap flex items-center gap-12 animate-marquee">
+        {notices.map((notice, i) => (
+          <div key={notice.id || i} className="inline-flex items-center gap-4 px-4">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary-rgb),0.8)]" />
+            <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">{notice.title}:</span>
+            <span className="text-[11px] font-bold text-slate-400 tracking-tight">{notice.message}</span>
+          </div>
+        ))}
+        {/* Duplicate for seamless scroll */}
+        {[...notices].map((notice, i) => (
+          <div key={`dup-${notice.id || i}`} className="inline-flex items-center gap-4 px-4">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary-rgb),0.8)]" />
+            <span className="text-[11px] font-black text-white uppercase tracking-[0.2em]">{notice.title}:</span>
+            <span className="text-[11px] font-bold text-slate-400 tracking-tight">{notice.message}</span>
+          </div>
+        ))}
+      </div>
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          display: inline-flex;
+          animation: marquee 40s linear infinite;
+        }
+        .animate-marquee:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
     </div>
   );
 };
@@ -9389,29 +9469,64 @@ const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: any) =
 
   // Academic year starts in April
   const academicMonths = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2]; // April (3) to March (2)
-  const monthNames = [
-    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-    "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
-  ];
 
   const currentYear = new Date().getFullYear();
   const startYear = new Date().getMonth() < 3 ? currentYear - 1 : currentYear;
   const endYear = startYear + 1;
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (!eventForm.title || !eventForm.date) return;
-    const newEvent: CalendarEvent = {
-      id: Date.now().toString(),
-      title: eventForm.title!,
-      date: eventForm.date!,
-      type: eventForm.type as any,
-      icon: eventForm.icon,
-      color: eventForm.color || 'bg-blue-50 text-blue-700 border-blue-200'
-    };
-    setCalendarEvents([...calendarEvents, newEvent]);
-    setShowEventModal(false);
-    setEventForm({ title: '', date: new Date().toISOString().split('T')[0], type: 'event', icon: '', color: 'bg-blue-50 text-blue-700 border-blue-200' });
+    if (!supabase) return;
+    
+    try {
+      const payload = {
+        title: eventForm.title!,
+        event_date: eventForm.date!,
+        event_type: eventForm.type as any,
+        icon: eventForm.icon,
+        color: eventForm.color || 'bg-blue-50 text-blue-700 border-blue-200'
+      };
+
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .insert([payload])
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        const newEvent: CalendarEvent = {
+          id: data[0].id,
+          title: data[0].title,
+          date: data[0].event_date,
+          type: data[0].event_type,
+          icon: data[0].icon,
+          color: data[0].color
+        };
+        setCalendarEvents([...calendarEvents, newEvent]);
+        setShowEventModal(false);
+        setEventForm({ title: '', date: new Date().toISOString().split('T')[0], type: 'event', icon: '', color: 'bg-blue-50 text-blue-700 border-blue-200' });
+        alert('Event added successfully!');
+      }
+    } catch (err) {
+      console.error('Error adding event:', err);
+      alert('Failed to add event');
+    }
   };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this event?') || !supabase) return;
+    try {
+      const { error } = await supabase.from('calendar_events').delete().eq('id', id);
+      if (error) throw error;
+      setCalendarEvents(calendarEvents.filter((e: CalendarEvent) => e.id !== id));
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      alert('Failed to delete event');
+    }
+  };
+
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
 
   const getEventsForDate = (year: number, month: number, day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -9445,7 +9560,7 @@ const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: any) =
           <p className="text-slate-500 font-bold text-sm">Annual Academic Calendar & Holiday List</p>
         </div>
         <div className="flex gap-3">
-          {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+          {isAdmin && (
             <button 
               onClick={() => setShowEventModal(true)}
               className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all active:scale-95"
@@ -9509,8 +9624,16 @@ const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: any) =
                                 {events.map(event => (
                                   <div 
                                     key={event.id} 
-                                    className={`text-[9px] font-bold p-1.5 rounded-lg border flex flex-col items-center justify-center text-center shadow-sm leading-tight ${event.color}`}
+                                    className={`group/event text-[9px] font-bold p-1.5 rounded-lg border flex flex-col items-center justify-center text-center shadow-sm leading-tight relative ${event.color}`}
                                   >
+                                    {isAdmin && (
+                                      <button 
+                                        onClick={() => handleDeleteEvent(event.id)}
+                                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover/event:opacity-100 transition-opacity"
+                                      >
+                                        <X size={8} />
+                                      </button>
+                                    )}
                                     {event.icon && <span className="text-lg mb-0.5">{event.icon}</span>}
                                     <span className="uppercase tracking-tighter">{event.title}</span>
                                   </div>
@@ -11207,7 +11330,8 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
   );
 };
 
-const CommunicatePanel = ({ notifications, setNotifications, templates, setTemplates }: any) => {
+const CommunicatePanel = ({ notifications, setNotifications, templates, setTemplates, currentUser }: any) => {
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
   const [activeTab, setActiveTab] = useState('notice-board');
   const [showAddNotice, setShowAddNotice] = useState(false);
   const [showAddTemplate, setShowAddTemplate] = useState(false);
@@ -11277,7 +11401,7 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
     title: '',
     message: '',
     type: 'Info',
-    targetRoles: ['admin', 'teacher', 'student', 'parent'],
+    targetRoles: ['admin', 'teacher', 'student', 'parent', 'staff', 'warden'],
     date: new Date().toISOString().split('T')[0]
   });
 
@@ -11340,12 +11464,14 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-black text-text-heading">Communicate</h2>
-        <button 
-          onClick={() => setShowAddNotice(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} /> Add Notice
-        </button>
+        {isAdmin && (
+          <button 
+            onClick={() => setShowAddNotice(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} /> Add Notice
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 border-b border-slate-200 overflow-x-auto pb-px">
@@ -11459,32 +11585,38 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
               <h4 className="font-black text-text-heading mb-2">{t.name}</h4>
               <p className="text-xs text-text-sub line-clamp-3 mb-4">{t.body}</p>
               <div className="flex justify-end gap-2">
-                <button 
-                  onClick={() => handleEditTemplate(t)}
-                  className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button 
-                  onClick={() => handleDeleteTemplate(t.id)}
-                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {isAdmin && (
+                  <>
+                    <button 
+                      onClick={() => handleEditTemplate(t)}
+                      className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteTemplate(t.id)}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
               </div>
             </Card>
           ))}
-          <button 
-            onClick={() => {
-              setEditingTemplateId(null);
-              setNewTemplate({ name: '', type: 'WhatsApp', body: '' });
-              setShowAddTemplate(true);
-            }}
-            className="p-6 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-primary hover:text-primary transition-all"
-          >
-            <Plus size={32} />
-            <span className="font-bold">Create Template</span>
-          </button>
+          {isAdmin && (
+            <button 
+              onClick={() => {
+                setEditingTemplateId(null);
+                setNewTemplate({ name: '', type: 'WhatsApp', body: '' });
+                setShowAddTemplate(true);
+              }}
+              className="p-6 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-primary hover:text-primary transition-all"
+            >
+              <Plus size={32} />
+              <span className="font-bold">Create Template</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -11565,6 +11697,28 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
                       <option value="Success">Success</option>
                       <option value="Fee">Fee Related</option>
                     </select>
+                  </div>
+                  <div className="w-full">
+                    <label className="label-text">Visible to Roles</label>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {(['admin', 'teacher', 'student', 'parent', 'staff', 'warden'] as const).map(role => (
+                        <label key={role} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                          <input 
+                            type="checkbox"
+                            checked={newNotice.targetRoles?.includes(role)}
+                            onChange={(e) => {
+                              const roles = newNotice.targetRoles || [];
+                              if (e.target.checked) {
+                                setNewNotice({...newNotice, targetRoles: [...roles, role]});
+                              } else {
+                                setNewNotice({...newNotice, targetRoles: roles.filter(r => r !== role)});
+                              }
+                            }}
+                          />
+                          <span className="text-xs font-bold uppercase tracking-widest">{role}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -14238,7 +14392,22 @@ export default function App() {
       if (rTemplates) setReportCardTemplates(rTemplates.map(rt => ({
         id: rt.id,
         name: rt.template_name,
-        terms: rt.terms,
+        terms: (rt.terms || []).map((t: any) => {
+          if (typeof t === 'string') {
+            return { id: t.toLowerCase().replace(/\s+/g, '-'), name: t, subColumns: [{ id: 'm1', name: 'Marks', maxMarks: 100 }] };
+          }
+          // Handle cases where subColumns might be missing or empty
+          if (t && typeof t === 'object') {
+            return {
+              id: t.id || ('t' + Date.now() + Math.random().toString(36).substr(2, 9)),
+              name: t.name || 'Untitled Term',
+              subColumns: (t.subColumns && t.subColumns.length > 0) 
+                ? t.subColumns 
+                : [{ id: 'm1', name: 'Marks', maxMarks: 100 }]
+            };
+          }
+          return t;
+        }),
         subjects: rt.subjects
       })));
 
@@ -14300,6 +14469,16 @@ export default function App() {
         ipAddress: ha.ip_address,
         location: ha.location,
         isHostel: true
+      })));
+
+      // Fetch Calendar Events
+      const { data: cEvents } = await supabase.from('calendar_events').select('*');
+      if (cEvents) setCalendarEvents(cEvents.map(ce => ({
+        id: ce.id,
+        title: ce.title,
+        date: ce.event_date,
+        type: ce.event_type,
+        color: ce.color
       })));
     };
 
@@ -15797,6 +15976,7 @@ export default function App() {
                 homeworks={homeworks}
                 leaveRequests={leaveRequests}
                 getStudentDueFees={getStudentDueFees}
+                notices={notices}
               />
             )}
 
@@ -16764,6 +16944,7 @@ export default function App() {
                   setNotifications={setNotifications}
                   templates={communicationTemplates}
                   setTemplates={setCommunicationTemplates}
+                  currentUser={currentUser}
                 />
               </motion.div>
             )}
@@ -19655,15 +19836,15 @@ const ExaminationModule = ({
       )
     : [];
 
-  const availableClasses = currentUser?.role === 'admin' 
-    ? masterData.classes 
-    : [...new Set(teacherAssignedClasses.map((a: any) => a.class))];
+  const availableClasses = (currentUser?.role === 'admin' || currentUser?.role === 'super-admin')
+    ? (masterData?.classes || [])
+    : [...new Set((teacherAssignedClasses || []).map((a: any) => a.class))];
 
-  const availableSections = currentUser?.role === 'admin'
-    ? masterData.sections
-    : [...new Set(teacherAssignedClasses.filter((a: any) => !reportFilters.class || a.class === reportFilters.class).map((a: any) => a.section))];
+  const availableSections = (currentUser?.role === 'admin' || currentUser?.role === 'super-admin')
+    ? (masterData?.sections || [])
+    : [...new Set((teacherAssignedClasses || []).filter((a: any) => !reportFilters.class || a.class === reportFilters.class).map((a: any) => a.section))];
 
-  const filteredStudentsForReport = students.filter((s: any) => {
+  const filteredStudentsForReport = (students || []).filter((s: any) => {
     return (!reportFilters.class || s.class === reportFilters.class) &&
            (!reportFilters.section || s.section === reportFilters.section);
   });
@@ -19693,9 +19874,12 @@ const ExaminationModule = ({
   });
 
   // Template Form
-  const [templateForm, setTemplateForm] = useState({
+  const [templateForm, setTemplateForm] = useState<any>({
     name: '',
-    terms: ['1st Term', '2nd Term'],
+    terms: [
+      { id: 't1' + Date.now(), name: '1st Term', subColumns: [{ id: 'm1', name: 'Marks', maxMarks: 100 }] },
+      { id: 't2' + Date.now(), name: '2nd Term', subColumns: [{ id: 'm2', name: 'Marks', maxMarks: 100 }] }
+    ],
     subjects: masterData.subjects
   });
 
@@ -19911,7 +20095,14 @@ const ExaminationModule = ({
           setReportCardTemplates([...reportCardTemplates, { ...inserted[0], name: inserted[0].template_name }]);
         }
       }
-      setTemplateForm({ name: '', terms: ['1st Term', '2nd Term'], subjects: masterData.subjects });
+      setTemplateForm({ 
+        name: '', 
+        terms: [
+          { id: 't1' + Date.now(), name: '1st Term', subColumns: [{ id: 'm1', name: 'Marks', maxMarks: 100 }] },
+          { id: 't2' + Date.now(), name: '2nd Term', subColumns: [{ id: 'm2', name: 'Marks', maxMarks: 100 }] }
+        ], 
+        subjects: masterData.subjects 
+      });
     } catch (err) {
       console.error('Error saving template:', err);
     }
@@ -20005,8 +20196,8 @@ const ExaminationModule = ({
   };
 
   const filteredSchedules = currentUser?.role === 'student'
-    ? examSchedules.filter((s: any) => s.class === currentUser.class && s.section === currentUser.section)
-    : examSchedules;
+    ? (examSchedules || []).filter((s: any) => (s.class_name || s.class) === currentUser.class && (s.section_name || s.section) === currentUser.section)
+    : (examSchedules || []);
 
   // Statistics Calculation
   const getStats = () => {
@@ -20016,8 +20207,8 @@ const ExaminationModule = ({
       bySubject: {}
     };
 
-    examResults.forEach((res: any) => {
-      const schedule = examSchedules.find((s: any) => s.id === res.examScheduleId);
+    (examResults || []).forEach((res: any) => {
+      const schedule = (examSchedules || []).find((s: any) => s.id === res.examScheduleId);
       if (!schedule) return;
 
       const keys = [
@@ -20116,12 +20307,12 @@ const ExaminationModule = ({
                   <ClipboardList size={20} /> Exam List
                 </h3>
                 <div className="space-y-4">
-                  {exams.length === 0 ? (
+                  { (exams || []).length === 0 ? (
                     <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-text-sub">No exams created yet.</p>
                     </div>
                   ) : (
-                    exams.map((exam: any) => (
+                    (exams || []).map((exam: any) => (
                       <div key={exam.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group">
                         <div>
                           <h4 className="font-bold text-lg">{exam.name}</h4>
@@ -20176,7 +20367,7 @@ const ExaminationModule = ({
                     <Calendar size={20} /> {editingScheduleId ? 'Edit Schedule' : 'Schedule Exam'}
                   </h3>
                   <div className="space-y-4">
-                    <Select label="Select Exam" options={exams.map(e => e.name)} value={exams.find(e => e.id === scheduleForm.examId)?.name || ''} onChange={(e: any) => setScheduleForm({...scheduleForm, examId: exams.find(ex => ex.name === e.target.value)?.id || ''})} />
+                    <Select label="Select Exam" options={(exams || []).map(e => e.name)} value={(exams || []).find(e => e.id === scheduleForm.examId)?.name || ''} onChange={(e: any) => setScheduleForm({...scheduleForm, examId: (exams || []).find(ex => ex.name === e.target.value)?.id || ''})} />
                     <Select label="Class" options={masterData.classes} value={scheduleForm.class} onChange={(e: any) => setScheduleForm({...scheduleForm, class: e.target.value})} />
                     <Select label="Section" options={masterData.sections} value={scheduleForm.section} onChange={(e: any) => setScheduleForm({...scheduleForm, section: e.target.value})} />
                     <Select label="Subject" options={masterData.subjects} value={scheduleForm.subject} onChange={(e: any) => setScheduleForm({...scheduleForm, subject: e.target.value})} />
@@ -20209,18 +20400,18 @@ const ExaminationModule = ({
                   <Clock size={20} /> Exam Time Table
                 </h3>
                 <div className="space-y-6">
-                  {filteredSchedules.length === 0 ? (
+                  { (filteredSchedules || []).length === 0 ? (
                     <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-text-sub">No exams scheduled yet.</p>
                     </div>
                   ) : (
-                    filteredSchedules.map((s: any) => (
+                    (filteredSchedules || []).map((s: any) => (
                       <div key={s.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 group">
                         <div className="flex items-center justify-between mb-4">
                           <div>
                             <h4 className="font-bold text-lg">{s.subject}</h4>
                             <p className="text-sm text-text-sub">{s.class} - {s.section} | Room: {s.room}</p>
-                            <p className="text-xs text-primary font-bold mt-1">Exam: {exams.find(e => e.id === s.examId)?.name}</p>
+                            <p className="text-xs text-primary font-bold mt-1">Exam: {(exams || []).find((e: any) => e.id === s.examId)?.name || 'N/A'}</p>
                           </div>
                           <div className="text-right flex flex-col items-end gap-2">
                             <div className="flex items-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all">
@@ -20298,7 +20489,7 @@ const ExaminationModule = ({
                   <div className="w-40">
                     <Select 
                       label="Section" 
-                      options={currentUser?.role === 'admin' ? masterData.sections : [...new Set(teacherAssignedClasses.filter((a: any) => a.class === marksFilters.class).map((a: any) => a.section))]} 
+                      options={(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') ? (masterData?.sections || []) : [...new Set((teacherAssignedClasses || []).filter((a: any) => a.class === marksFilters.class).map((a: any) => a.section))]} 
                       value={marksFilters.section}
                       onChange={(e: any) => setMarksFilters({...marksFilters, section: e.target.value})}
                     />
@@ -20316,7 +20507,7 @@ const ExaminationModule = ({
                     <div key={s.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                       <div className="mb-6">
                         <h4 className="font-bold text-xl">{s.subject} ({s.class}-{s.section})</h4>
-                        <p className="text-sm text-text-sub">Exam: {exams.find(e => e.id === s.examId)?.name}</p>
+                        <p className="text-sm text-text-sub">Exam: {(exams || []).find((e: any) => e.id === s.examId)?.name || 'N/A'}</p>
                       </div>
                       
                       <div className="overflow-x-auto">
@@ -20330,8 +20521,8 @@ const ExaminationModule = ({
                             </tr>
                           </thead>
                           <tbody className="text-sm">
-                            {students.filter((st: any) => st.class === s.class && st.section === s.section).map((student: any) => {
-                              const result = examResults.find((r: any) => r.examScheduleId === s.id && r.studentId === student.studentId);
+                            {(students || []).filter((st: any) => st.class === s.class && st.section === s.section).map((student: any) => {
+                              const result = (examResults || []).find((r: any) => r.examScheduleId === s.id && r.studentId === student.studentId);
                               const currentData = marksForm[`${s.id}_${student.studentId}`] || { marks: result?.marks || '', feedback: result?.feedback || '' };
 
                               return (
@@ -20401,25 +20592,66 @@ const ExaminationModule = ({
                     onChange={(e: any) => setTemplateForm({...templateForm, name: e.target.value})}
                   />
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <h4 className="text-xs font-bold uppercase mb-2">Terms</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {templateForm.terms.map((term, idx) => (
-                        <span key={idx} className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-2">
-                          {term}
-                          <button onClick={() => setTemplateForm({...templateForm, terms: templateForm.terms.filter((_, i) => i !== idx)})} className="text-red-500">
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
+                    <h4 className="text-xs font-bold uppercase mb-4 flex items-center justify-between">
+                      Terms & Sub-Columns
                       <button 
                         onClick={() => {
-                          const term = prompt('Enter term name:');
-                          if (term) setTemplateForm({...templateForm, terms: [...templateForm.terms, term]});
+                          const termName = prompt('Enter term name:');
+                          if (termName) {
+                            setTemplateForm({...templateForm, terms: [...templateForm.terms, { 
+                              id: 't' + Date.now(), 
+                              name: termName, 
+                              subColumns: [{ id: 'm' + Date.now(), name: 'Marks', maxMarks: 100 }] 
+                            }]});
+                          }
                         }}
-                        className="px-3 py-1 bg-primary text-white rounded-lg text-[10px] font-bold uppercase"
+                        className="px-2 py-1 bg-primary text-white rounded-lg text-[10px] font-bold uppercase"
                       >
                         Add Term
                       </button>
+                    </h4>
+                    <div className="space-y-4">
+                      {templateForm.terms.map((term: any, idx: number) => (
+                        <div key={term.id || idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-tight">{term.name}</span>
+                            <button onClick={() => setTemplateForm({...templateForm, terms: templateForm.terms.filter((_: any, i: number) => i !== idx)})} className="p-1 hover:bg-red-50 text-red-500 rounded">
+                              <X size={12} />
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {(term.subColumns || []).map((col: any, sIdx: number) => (
+                              <span key={col.id || sIdx} className="px-2 py-0.5 bg-slate-50 border border-slate-100 rounded-md text-[10px] font-bold flex items-center gap-1">
+                                {col.name} ({col.maxMarks})
+                                <button 
+                                  onClick={() => {
+                                    const newTerms = [...templateForm.terms];
+                                    newTerms[idx].subColumns = term.subColumns.filter((_: any, i: number) => i !== sIdx);
+                                    setTemplateForm({...templateForm, terms: newTerms});
+                                  }}
+                                  className="text-text-sub"
+                                >
+                                  <X size={8} />
+                                </button>
+                              </span>
+                            ))}
+                            <button 
+                              onClick={() => {
+                                const colName = prompt('Enter sub-column name (e.g. Oral, Written):');
+                                if (colName) {
+                                  const max = Number(prompt('Enter max marks for this column:', '100'));
+                                  const newTerms = [...templateForm.terms];
+                                  newTerms[idx].subColumns = [...(term.subColumns || []), { id: 's' + Date.now(), name: colName, maxMarks: isNaN(max) ? 100 : max }];
+                                  setTemplateForm({...templateForm, terms: newTerms});
+                                }
+                              }}
+                              className="px-2 py-0.5 border border-dashed border-primary text-primary rounded-md text-[10px] hover:bg-primary/5"
+                            >
+                              + Add Sub
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -20449,7 +20681,14 @@ const ExaminationModule = ({
                       <button 
                         onClick={() => {
                           setEditingTemplateId(null);
-                          setTemplateForm({ name: '', terms: ['1st Term', '2nd Term'], subjects: masterData.subjects });
+                          setTemplateForm({ 
+                            name: '', 
+                            terms: [
+                              { id: 't1' + Date.now(), name: '1st Term', subColumns: [{ id: 'm1', name: 'Marks', maxMarks: 100 }] },
+                              { id: 't2' + Date.now(), name: '2nd Term', subColumns: [{ id: 'm2', name: 'Marks', maxMarks: 100 }] }
+                            ], 
+                            subjects: masterData.subjects 
+                          });
                         }}
                         className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold"
                       >
@@ -20465,16 +20704,16 @@ const ExaminationModule = ({
                   <ClipboardList size={20} /> Template List
                 </h3>
                 <div className="space-y-4">
-                  {reportCardTemplates.length === 0 ? (
+                  { (reportCardTemplates || []).length === 0 ? (
                     <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-text-sub">No templates created yet.</p>
                     </div>
                   ) : (
-                    reportCardTemplates.map((t: any) => (
+                    (reportCardTemplates || []).map((t: any) => (
                       <div key={t.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group">
                         <div>
                           <h4 className="font-bold text-lg">{t.name}</h4>
-                          <p className="text-sm text-text-sub">{t.terms.length} Terms | {t.subjects.length} Subjects</p>
+                          <p className="text-sm text-text-sub">{(t.terms || []).length} Terms | {(t.subjects || []).length} Subjects</p>
                         </div>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
                           <button 
@@ -20545,21 +20784,21 @@ const ExaminationModule = ({
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {filteredStudentsForReport.length === 0 ? (
+                      {(filteredStudentsForReport || []).length === 0 ? (
                         <tr>
                           <td colSpan={4} className="py-12 text-center text-text-sub italic">
                             No students found. Please select class and section.
                           </td>
                         </tr>
                       ) : (
-                        filteredStudentsForReport.map((student: any) => {
-                          const reportCard = reportCards.find(rc => rc.studentId === student.studentId);
+                        (filteredStudentsForReport || []).map((student: any) => {
+                          const reportCard = (reportCards || []).find(rc => rc.studentId === student.studentId);
                           return (
                             <tr key={student.studentId} className="border-b border-slate-100 last:border-0">
                               <td className="py-4 px-4">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs">
-                                    {student.name[0]}{student.surname[0]}
+                                    {(student.name || 'S')[0]}{(student.surname || 'T')[0]}
                                   </div>
                                   <div>
                                     <p className="font-medium text-text-heading">{student.name} {student.surname}</p>
@@ -20623,8 +20862,8 @@ const ExaminationModule = ({
             {selectedReportStudent && (
               <ReportCardEditor 
                 student={selectedReportStudent}
-                template={reportCardTemplates.find(t => t.subjects && t.subjects.length > 0) || reportCardTemplates[0]}
-                reportCard={reportCards.find(rc => rc.studentId === selectedReportStudent.studentId)}
+                template={(reportCardTemplates || []).find((t: any) => t.subjects && t.subjects.length > 0) || (reportCardTemplates || [])[0]}
+                reportCard={(reportCards || []).find((rc: any) => rc.studentId === selectedReportStudent.studentId)}
                 onClose={() => setSelectedReportStudent(null)}
                 onSave={async (data: any) => {
                   try {
@@ -20642,12 +20881,16 @@ const ExaminationModule = ({
                       is_published: rcData.isPublished
                     };
 
-                    if (id && !id.startsWith('rc')) { // Existing record (UUID)
+                    // Detect if it's a UUID (Supabase generated) or a temporary numeric string ID
+                    const isNewRecord = !id || id.length < 20 || /^\d+$/.test(id);
+
+                    if (!isNewRecord) { // Existing record (UUID)
                       const { error } = await supabase
                         .from('report_cards')
                         .update(payload)
                         .eq('id', id);
                       if (error) throw error;
+                      alert('Report card updated successfully!');
                     } else { // New record
                       const { data: inserted, error } = await supabase
                         .from('report_cards')
@@ -20663,12 +20906,13 @@ const ExaminationModule = ({
                           promotionStatus: inserted[0].promotion_status,
                           isPublished: inserted[0].is_published
                         };
-                        setReportCards([...reportCards, newRC]);
+                        setReportCards(prev => [...prev, newRC]);
+                        alert('Report card generated successfully!');
                       }
                     }
 
                     // Refresh local state if update
-                    if (id && !id.startsWith('rc')) {
+                    if (!isNewRecord) {
                       const existingIdx = reportCards.findIndex(rc => rc.id === id);
                       if (existingIdx > -1) {
                         const updated = [...reportCards];
@@ -20676,6 +20920,7 @@ const ExaminationModule = ({
                         setReportCards(updated);
                       }
                     }
+                    setSelectedReportStudent(null);
                   } catch (err) {
                     console.error('Error saving report card:', err);
                   }
@@ -20693,8 +20938,8 @@ const ExaminationModule = ({
                 <Card>
                   <h4 className="text-sm font-bold text-primary uppercase tracking-wider mb-6">Class-wise Performance</h4>
                   <div className="space-y-4">
-                    {Object.entries(stats.byClass).map(([className, data]: any) => {
-                      const passRate = ((data.pass / data.total) * 100).toFixed(1);
+            {Object.entries(stats.byClass || {}).map(([className, data]: any) => {
+              const passRate = data?.total > 0 ? ((data.pass / data.total) * 100).toFixed(1) : "0.0";
                       return (
                         <div key={className} className="space-y-2">
                           <div className="flex justify-between text-sm">
@@ -20714,8 +20959,8 @@ const ExaminationModule = ({
                 <Card>
                   <h4 className="text-sm font-bold text-primary uppercase tracking-wider mb-6">Section-wise Performance</h4>
                   <div className="space-y-4">
-                    {Object.entries(stats.bySection).map(([sectionName, data]: any) => {
-                      const passRate = ((data.pass / data.total) * 100).toFixed(1);
+            {Object.entries(stats.bySection || {}).map(([sectionName, data]: any) => {
+              const passRate = data?.total > 0 ? ((data.pass / data.total) * 100).toFixed(1) : "0.0";
                       return (
                         <div key={sectionName} className="space-y-2">
                           <div className="flex justify-between text-sm">
@@ -20735,8 +20980,8 @@ const ExaminationModule = ({
                 <Card>
                   <h4 className="text-sm font-bold text-primary uppercase tracking-wider mb-6">Subject-wise Performance</h4>
                   <div className="space-y-4">
-                    {Object.entries(stats.bySubject).map(([subject, data]: any) => {
-                      const passRate = ((data.pass / data.total) * 100).toFixed(1);
+            {Object.entries(stats.bySubject || {}).map(([subject, data]: any) => {
+              const passRate = data?.total > 0 ? ((data.pass / data.total) * 100).toFixed(1) : "0.0";
                       return (
                         <div key={subject} className="space-y-2">
                           <div className="flex justify-between text-sm">
