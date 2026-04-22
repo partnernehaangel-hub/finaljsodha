@@ -1675,10 +1675,12 @@ const Select = ({ label, options, required = false, value, onChange, ...props }:
         required={required}
         {...props}
       >
-        <option value="">Select {label}</option>
-        {(options || []).map((opt: string) => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
+        <option key="default" value="">Select {label}</option>
+        {(options || []).map((opt: any, index: number) => {
+          const val = typeof opt === 'object' ? (opt.value || opt.id) : opt;
+          const lbl = typeof opt === 'object' ? (opt.label || opt.name) : opt;
+          return <option key={`${val}-${index}`} value={val}>{lbl}</option>;
+        })}
       </select>
     </div>
   );
@@ -2838,7 +2840,7 @@ const Academics = ({
     classTeacher: '',
     subject: '',
     teacher: '',
-    session: '2024-25'
+    session: schoolProfile.currentSession || '2024-25'
   });
 
   // Syllabus Form
@@ -3049,7 +3051,7 @@ const Academics = ({
     if (!assignForm.class || !assignForm.section) return;
     
     const assignmentData = {
-      academic_session: assignForm.session,
+      academic_session: assignForm.session || schoolProfile.currentSession,
       class_name: assignForm.class,
       section_name: assignForm.section,
       class_teacher_name: assignForm.classTeacher,
@@ -3063,11 +3065,19 @@ const Academics = ({
         .select('*')
         .eq('class_name', assignForm.class)
         .eq('section_name', assignForm.section)
-        .eq('academic_session', assignForm.session)
-        .single();
+        .eq('academic_session', assignForm.session || schoolProfile.currentSession)
+        .maybeSingle();
 
       if (existing) {
-        const updatedAssignments = [...existing.subject_teacher_assignments];
+        let updatedAssignments = [];
+        try {
+          updatedAssignments = typeof existing.subject_teacher_assignments === 'string' 
+            ? JSON.parse(existing.subject_teacher_assignments) 
+            : (Array.isArray(existing.subject_teacher_assignments) ? existing.subject_teacher_assignments : []);
+        } catch (e) {
+          updatedAssignments = [];
+        }
+        
         const subIdx = updatedAssignments.findIndex((st: any) => st.subject === assignForm.subject);
         if (subIdx > -1) {
           updatedAssignments[subIdx].teacher = assignForm.teacher;
@@ -3144,7 +3154,7 @@ const Academics = ({
       }
       alert('Teacher assigned!');
     }
-    setAssignForm({ id: '', class: '', section: '', classTeacher: '', subject: '', teacher: '', session: '2024-25' });
+    setAssignForm({ id: '', class: '', section: '', classTeacher: '', subject: '', teacher: '', session: schoolProfile.currentSession || '2024-25' });
   };
 
   const handleDeleteAssignment = (id: string) => {
@@ -3164,7 +3174,8 @@ const Academics = ({
       title: syllabusForm.title,
       description: syllabusForm.description,
       file_url: syllabusForm.file,
-      status: 'Not Started'
+      status: 'Not Started',
+      academic_session: schoolProfile.currentSession
     };
 
     if (supabase) {
@@ -3244,7 +3255,9 @@ const Academics = ({
       title: homeworkForm.title,
       instructions: homeworkForm.description,
       due_date: homeworkForm.dueDate || new Date().toISOString().split('T')[0],
-      file_url: homeworkFile || undefined
+      file_url: homeworkFile || undefined,
+      academic_session: schoolProfile.currentSession,
+      posted_date: new Date().toISOString().split('T')[0]
     };
 
     if (supabase) {
@@ -3432,21 +3445,20 @@ const Academics = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('students')
-        .upsert(updatedStudents.map(s => ({
-          id: s.id,
-          student_id: s.studentId,
-          first_name: s.name,
-          surname: s.surname,
-          class_name: s.class,
-          section_name: s.section,
-          roll_number: s.rollNumber
-        })), { onConflict: 'id' });
+      // Use individual updates instead of upsert to avoid triggering NOT NULL constraints on other columns
+      const updatePromises = updatedStudents.map(s => 
+        supabase
+          .from('students')
+          .update({ roll_number: s.rollNumber })
+          .eq('id', s.id)
+      );
 
-      if (error) {
-        console.error('Error saving roll numbers:', error);
-        showModal('Error', `Failed to save roll numbers: ${error.message}`);
+      const results = await Promise.all(updatePromises);
+      const firstError = results.find(r => r.error)?.error;
+
+      if (firstError) {
+        console.error('Error saving roll numbers:', firstError);
+        showModal('Error', `Failed to save roll numbers: ${firstError.message}`);
         return;
       }
 
@@ -4665,7 +4677,8 @@ const FeeManagement = ({
           type: contraForm.type,
           amount: Number(contraForm.amount),
           reference: contraForm.reference,
-          date: contraForm.date
+          date: contraForm.date,
+          academic_session: schoolProfile.currentSession
         }])
         .select();
 
@@ -4710,7 +4723,8 @@ const FeeManagement = ({
             type: `${type} Adjustment`,
             amount,
             reference: reason,
-            date: new Date().toISOString().split('T')[0]
+            date: new Date().toISOString().split('T')[0],
+            academic_session: schoolProfile.currentSession
           }])
           .select();
 
@@ -4920,6 +4934,7 @@ const FeeManagement = ({
           invoice_number: invoiceNumber,
           collected_by: 'Admin',
           month: selectedMonth,
+          academic_session: selectedStudent.session || schoolProfile.currentSession || '2024-25',
           date: new Date().toISOString().split('T')[0],
           due_date: paymentDetails.dueDate,
           status: amountToCollect >= totalPayable ? 'Paid' : 'Partial',
@@ -4978,7 +4993,7 @@ const FeeManagement = ({
   };
 
   const filteredTransactions = feeTransactions.filter(t => {
-    const matchesDate = !filters.date || t.date === formatDate(new Date(filters.date));
+    const matchesDate = !filters.date || t.date === filters.date;
     const matchesClass = !filters.class || t.class === filters.class;
     const matchesSection = !filters.section || t.section === filters.section;
     const matchesSearch = !filters.search || 
@@ -5015,8 +5030,8 @@ const FeeManagement = ({
     const newEntries: any[] = [];
     Object.entries(masterSelections).forEach(([feeType, data]: [string, any]) => {
       if (data.selected && data.amount > 0) {
-        // Check if already exists for this class and type
-        const exists = feeMaster.find((f: any) => f.class === masterClass && f.feeType === feeType);
+        // Find existing safely
+        const exists = feeMaster.find((f: any) => (f.class === masterClass || f.class_name === masterClass) && f.feeType === feeType);
         if (!exists) {
           newEntries.push({
             class_name: masterClass,
@@ -5024,7 +5039,7 @@ const FeeManagement = ({
             amount: Number(data.amount),
             frequency: data.frequency,
             student_type: data.studentType || 'Both',
-            academic_session: schoolProfile.currentSession || '2023-24'
+            academic_session: schoolProfile.currentSession || '2024-25'
           });
         }
       }
@@ -5032,12 +5047,16 @@ const FeeManagement = ({
 
     if (newEntries.length > 0) {
       try {
+        console.log('Inserting fee master entries:', newEntries);
         const { data: inserted, error } = await supabase
           .from('fee_master')
           .insert(newEntries)
           .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase Fee Assignment Error details:', error);
+          throw error;
+        }
 
         if (inserted) {
           const formattedInserted = inserted.map(fm => ({
@@ -5444,21 +5463,27 @@ const FeeManagement = ({
                           <Edit2 size={16} />
                         </button>
                         <button 
-                          onClick={async () => {
-                            if (confirm('Are you sure?') && supabase) {
-                              try {
-                                const { error } = await supabase
-                                  .from('fee_types')
-                                  .delete()
-                                  .eq('id', f.id);
-                                
-                                if (error && error.code !== '22P02') throw error;
-                                setFeeTypes(prev => prev.filter(t => t.id !== f.id));
-                              } catch (err) {
-                                console.error('Error deleting fee type:', err);
-                                alert('Error deleting fee type');
+                          onClick={() => {
+                            showModal(
+                              'Confirm Delete',
+                              'Are you sure you want to delete this fee type?',
+                              async () => {
+                                try {
+                                  if (!supabase) return;
+                                  const { error } = await supabase
+                                    .from('fee_types')
+                                    .delete()
+                                    .eq('id', f.id);
+                                  
+                                  if (error) throw error;
+                                  setFeeTypes(prev => prev.filter(t => t.id !== f.id));
+                                  alert('Fee type deleted successfully');
+                                } catch (err) {
+                                  console.error('Error deleting fee type:', err);
+                                  alert('Error deleting fee type: ' + (err as any).message);
+                                }
                               }
-                            }
+                            );
                           }} 
                           className="text-red-500 hover:bg-red-50 p-1 rounded-lg"
                         >
@@ -5626,12 +5651,13 @@ const FeeManagement = ({
                                   try {
                                     if (supabase) {
                                       const { error } = await supabase.from('fee_master').delete().eq('id', m.id);
-                                      if (error && error.code !== '22P02') throw error;
+                                      if (error) throw error;
                                     }
                                     setFeeMaster(prev => prev.filter(f => f.id !== m.id));
+                                    alert('Fee assignment deleted successfully');
                                   } catch (err) {
                                     console.error('Error deleting fee assignment:', err);
-                                    alert('Error deleting fee assignment');
+                                    alert('Error deleting fee assignment: ' + (err as any).message);
                                   }
                                 }
                               );
@@ -5693,14 +5719,14 @@ const FeeManagement = ({
                           student_type: editingFee.studentType || 'Both'
                         })
                         .eq('id', editingFee.id);
-                      if (error && error.code !== '22P02') throw error;
+                      if (error) throw error;
                     }
                     setFeeMaster(prev => prev.map(f => f.id === editingFee.id ? editingFee : f));
                     setEditingFee(null);
                     alert('Fee updated successfully!');
                   } catch (err) {
                     console.error('Error updating fee:', err);
-                    alert('Error updating fee');
+                    alert('Error updating fee: ' + (err as any).message);
                   }
                 }}
                 className="w-full btn-primary py-3"
@@ -6057,7 +6083,7 @@ const FeeManagement = ({
                           // This is simplified. For a real ledger, we'd need more logic.
                           return (
                             <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="py-4 text-sm">{e.date}</td>
+                              <td className="py-4 text-sm">{formatDate(e.date)}</td>
                               <td className="py-4 text-sm font-medium">
                                 {e.reference}
                                 <p className="text-[10px] text-text-sub uppercase">{e.type}</p>
@@ -6165,7 +6191,7 @@ const FeeManagement = ({
                         {log.amount < 0 ? '-' : '+'}₹{Math.abs(log.amount).toLocaleString()}
                       </td>
                       <td className="py-4 text-sm text-text-sub">{log.reference}</td>
-                      <td className="py-4 text-sm">{log.date}</td>
+                      <td className="py-4 text-sm">{formatDate(log.date)}</td>
                     </tr>
                   ))
                 )}
@@ -6258,9 +6284,9 @@ const FeeManagement = ({
                         Share Report
                       </button>
                     </div>
-                </div>
+                  </div>
 
-                <div className="overflow-x-auto">
+                  <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="text-left border-b border-slate-200">
@@ -6276,7 +6302,7 @@ const FeeManagement = ({
                     <tbody className="divide-y divide-slate-100">
                       {filteredTransactions.map(t => (
                         <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 text-sm font-medium text-text-sub">{t.date}</td>
+                          <td className="py-4 text-sm font-medium text-text-sub">{formatDate(t.date)}</td>
                           <td className="py-4">
                             <p className="text-sm font-bold text-text-heading">{t.studentName}</p>
                             <p className="text-[10px] text-text-sub uppercase">{t.studentId}</p>
@@ -6373,7 +6399,47 @@ const FeeManagement = ({
                     <History size={20} />
                     Bank & Cash Statement
                   </h3>
-                  <div className="flex gap-6">
+                  <div className="flex gap-4 items-center">
+                    <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                      <Calendar size={16} className="text-text-secondary" />
+                      <input 
+                        type="date" 
+                        className="bg-transparent outline-none text-sm font-medium"
+                        value={filters.date}
+                        onChange={(e) => setFilters({...filters, date: e.target.value})}
+                      />
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const movements = [
+                          ...feeTransactions.map(t => ({
+                            Date: t.date,
+                            Particulars: `Fee: ${t.studentName} (${t.feeType})`,
+                            'Cash In/Out': t.paymentMode === 'Cash' ? t.totalPaid : 0,
+                            'Bank In/Out': t.paymentMode !== 'Cash' ? t.totalPaid : 0,
+                            Type: 'Receipt'
+                          })),
+                          ...contraEntries.map(e => ({
+                            Date: e.date,
+                            Particulars: `${e.type.includes('Adjustment') ? 'Adj' : 'Contra'}: ${e.type} (${e.reference})`,
+                            'Cash In/Out': e.type === 'Bank to Cash' ? e.amount : e.type === 'Cash to Bank' ? -e.amount : e.type === 'Cash Adjustment' ? e.amount : 0,
+                            'Bank In/Out': e.type === 'Cash to Bank' ? e.amount : e.type === 'Bank to Cash' ? -e.amount : e.type === 'Bank Adjustment' ? e.amount : 0,
+                            Type: e.type.includes('Adjustment') ? 'Adjustment' : 'Contra'
+                          }))
+                        ].sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime())
+                         .filter(m => !filters.date || m.Date === filters.date);
+
+                        const ws = XLSX.utils.json_to_sheet(movements);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "Statement");
+                        XLSX.writeFile(wb, `Bank_Cash_Statement_${new Date().toISOString().split('T')[0]}.xlsx`);
+                      }}
+                      className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md"
+                    >
+                      <FileSpreadsheet size={18} />
+                      Export Statement
+                    </button>
+                    <div className="flex gap-4 ml-2">
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-text-sub uppercase">Bank Balance</p>
                       <p className="text-lg font-black text-primary">₹{bankBalance.toLocaleString()}</p>
@@ -6384,9 +6450,10 @@ const FeeManagement = ({
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
                     <thead>
                       <tr className="border-b border-slate-200">
                         <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
@@ -6408,19 +6475,17 @@ const FeeManagement = ({
                           })),
                           ...contraEntries.map(e => ({
                             date: e.date,
-                            particulars: `Contra: ${e.type} (${e.reference})`,
-                            cash: e.type === 'Bank to Cash' ? e.amount : -e.amount,
-                            bank: e.type === 'Bank to Cash' ? -e.amount : e.amount,
-                            type: 'Contra'
-                          })),
-                          ...adjustmentLogs.map(l => ({
-                            date: l.date,
-                            particulars: `Adjustment: ${l.type} (${l.reference})`,
-                            cash: l.type.includes('Cash') ? l.amount : 0,
-                            bank: l.type.includes('Bank') ? l.amount : 0,
-                            type: 'Adjustment'
+                            particulars: `${e.type.includes('Adjustment') ? 'Adj' : 'Contra'}: ${e.type} (${e.reference})`,
+                            cash: e.type === 'Bank to Cash' ? e.amount : 
+                                  e.type === 'Cash to Bank' ? -e.amount : 
+                                  e.type === 'Cash Adjustment' ? e.amount : 0,
+                            bank: e.type === 'Cash to Bank' ? e.amount : 
+                                  e.type === 'Bank to Cash' ? -e.amount : 
+                                  e.type === 'Bank Adjustment' ? e.amount : 0,
+                            type: e.type.includes('Adjustment') ? 'Adjustment' : 'Contra'
                           }))
-                        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        ].filter(m => !filters.date || m.date === filters.date)
+                         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
                         let runningCash = 0;
                         let runningBank = 0;
@@ -6430,7 +6495,7 @@ const FeeManagement = ({
                           runningBank += m.bank;
                           return (
                             <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="py-4 text-sm text-text-sub">{m.date}</td>
+                              <td className="py-4 text-sm text-text-sub">{formatDate(m.date)}</td>
                               <td className="py-4">
                                 <p className="text-sm font-bold text-text-heading">{m.particulars}</p>
                                 <p className="text-[10px] text-text-sub uppercase">{m.type}</p>
@@ -13123,6 +13188,18 @@ export default function App() {
           ALTER TABLE students ADD COLUMN IF NOT EXISTS photo_url TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS relations JSONB DEFAULT '[]'::jsonb;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb;
+          
+          -- Making name columns nullable to prevent blockers
+          ALTER TABLE students ALTER COLUMN first_name DROP NOT NULL;
+          ALTER TABLE students ALTER COLUMN surname DROP NOT NULL;
+          
+          DO $$ 
+          BEGIN 
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'students' AND column_name = 'name') THEN
+              EXECUTE 'ALTER TABLE students ALTER COLUMN "name" DROP NOT NULL';
+            END IF;
+          END $$;
+
           ALTER TABLE students ADD COLUMN IF NOT EXISTS first_name TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS surname TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS title TEXT;
@@ -13171,17 +13248,75 @@ export default function App() {
         `;
 
         const feeMigrations = `
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS month TEXT;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS discount_reason TEXT;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS transaction_id TEXT;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS invoice_number TEXT;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS collected_by TEXT;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS due_date DATE;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS status TEXT;
-          ALTER TABLE fee_collections ADD COLUMN IF NOT EXISTS breakdown JSONB;
+          -- 1. Standardize Fee Types
+          INSERT INTO fee_types (name, description) VALUES 
+          ('Admission Fee', 'One-time fee for new students'),
+          ('Re-admission Fee', 'Annual fee for old students'),
+          ('Hostel Fee', 'Monthly fee for hostel residents'),
+          ('Tuition Fee', 'Monthly tuition fee'),
+          ('Examination Fee', 'Termly exam fee'),
+          ('Transport Fee', 'Monthly transport fee')
+          ON CONFLICT (name) DO NOTHING;
+
+          -- 2. Standardize fee_master (Renaming old columns if they exist)
+          DO $$ 
+          BEGIN 
+            -- Fix 'session' -> 'academic_session'
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fee_master' AND column_name = 'session') THEN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fee_master' AND column_name = 'academic_session') THEN
+                   ALTER TABLE fee_master RENAME COLUMN "session" TO "academic_session";
+                ELSE
+                   UPDATE fee_master SET academic_session = "session" WHERE academic_session IS NULL;
+                   ALTER TABLE fee_master ALTER COLUMN "session" DROP NOT NULL;
+                END IF;
+            END IF;
+            
+            -- Fix 'class' -> 'class_name'
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fee_master' AND column_name = 'class') THEN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'fee_master' AND column_name = 'class_name') THEN
+                   ALTER TABLE fee_master RENAME COLUMN "class" TO "class_name";
+                ELSE
+                   UPDATE fee_master SET class_name = "class" WHERE class_name IS NULL;
+                   ALTER TABLE fee_master ALTER COLUMN "class" DROP NOT NULL;
+                END IF;
+            END IF;
+          END $$;
+
+          ALTER TABLE IF EXISTS fee_master ADD COLUMN IF NOT EXISTS class_name TEXT;
+          ALTER TABLE IF EXISTS fee_master ADD COLUMN IF NOT EXISTS fee_type TEXT;
+          ALTER TABLE IF EXISTS fee_master ADD COLUMN IF NOT EXISTS amount NUMERIC DEFAULT 0;
+          ALTER TABLE IF EXISTS fee_master ADD COLUMN IF NOT EXISTS frequency TEXT;
+          ALTER TABLE IF EXISTS fee_master ADD COLUMN IF NOT EXISTS student_type TEXT DEFAULT 'Both';
+          ALTER TABLE IF EXISTS fee_master ADD COLUMN IF NOT EXISTS academic_session TEXT;
+
+          -- 3. Standardize fee_collections
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS class TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS session TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS month TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS academic_session TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS status TEXT;
+          ALTER TABLE IF EXISTS fee_collections ADD COLUMN IF NOT EXISTS breakdown JSONB;
+
+          -- 4. Financial Tables
+          CREATE TABLE IF NOT EXISTS contra_entries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            type TEXT,
+            amount NUMERIC DEFAULT 0,
+            reference TEXT,
+            date TEXT,
+            academic_session TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+
+          ALTER TABLE IF EXISTS income_heads ADD COLUMN IF NOT EXISTS name TEXT;
+          ALTER TABLE IF EXISTS expense_heads ADD COLUMN IF NOT EXISTS name TEXT;
+          ALTER TABLE IF EXISTS incomes ADD COLUMN IF NOT EXISTS income_head TEXT;
+          ALTER TABLE IF EXISTS expenses ADD COLUMN IF NOT EXISTS expense_head TEXT;
         `;
 
         const securityMigrations = `
@@ -13234,39 +13369,226 @@ export default function App() {
 
         const academicsMigrations = `
           -- Standardizing teacher_assignments columns
-          DO $$ 
-          BEGIN 
-            -- If 'session' exists but 'academic_session' doesn't, rename it
-            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'session') 
-               AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'academic_session') THEN
-              ALTER TABLE teacher_assignments RENAME COLUMN "session" TO "academic_session";
-            END IF;
-            
-            -- Ensure academic_session is nullable if it was NOT NULL and we want to be safe during transitions 
-            -- or just ensure it exists
-          END $$;
-
           ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS academic_session TEXT;
           ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS class_name TEXT;
           ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS section_name TEXT;
           ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS class_teacher_name TEXT;
           ALTER TABLE teacher_assignments ADD COLUMN IF NOT EXISTS subject_teacher_assignments JSONB;
+          
+          -- Fix potential NOT NULL issues for older columns that might still exist in user's DB
+          DO $$ 
+          BEGIN 
+            -- teacher_assignments fallbacks
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'session') THEN
+              EXECUTE 'ALTER TABLE teacher_assignments ALTER COLUMN "session" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'class') THEN
+              EXECUTE 'ALTER TABLE teacher_assignments ALTER COLUMN "class" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'section') THEN
+              EXECUTE 'ALTER TABLE teacher_assignments ALTER COLUMN "section" DROP NOT NULL';
+            END IF;
+
+            -- syllabus fallbacks
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'syllabus' AND column_name = 'class') THEN
+              EXECUTE 'ALTER TABLE syllabus ALTER COLUMN "class" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'syllabus' AND column_name = 'section') THEN
+              EXECUTE 'ALTER TABLE syllabus ALTER COLUMN "section" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'syllabus' AND column_name = 'subject') THEN
+              EXECUTE 'ALTER TABLE syllabus ALTER COLUMN "subject" DROP NOT NULL';
+            END IF;
+
+            -- homework fallbacks
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'homework' AND column_name = 'class') THEN
+              EXECUTE 'ALTER TABLE homework ALTER COLUMN "class" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'homework' AND column_name = 'section') THEN
+              EXECUTE 'ALTER TABLE homework ALTER COLUMN "section" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'homework' AND column_name = 'session') THEN
+              EXECUTE 'ALTER TABLE homework ALTER COLUMN "session" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'homework' AND column_name = 'subject') THEN
+              EXECUTE 'ALTER TABLE homework ALTER COLUMN "subject" DROP NOT NULL';
+            END IF;
+            
+            -- Reload schema for PostgREST
+            NOTIFY pgrst, 'reload schema';
+          END $$;
 
           ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS class_name TEXT;
           ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS subject TEXT;
           ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS title TEXT;
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS description TEXT;
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS academic_session TEXT;
           ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Not Started';
+          ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS posted_date TEXT DEFAULT CURRENT_DATE::TEXT;
 
           ALTER TABLE homework ADD COLUMN IF NOT EXISTS class_name TEXT;
           ALTER TABLE homework ADD COLUMN IF NOT EXISTS section_name TEXT;
           ALTER TABLE homework ADD COLUMN IF NOT EXISTS subject TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS title TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS instructions TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS academic_session TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS due_date DATE; -- Changed to DATE to match schema
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS file_url TEXT;
+          ALTER TABLE homework ADD COLUMN IF NOT EXISTS posted_date TEXT DEFAULT CURRENT_DATE::TEXT;
         `;
 
-        await supabase.rpc('exec_sql', { sql_query: securityMigrations });
-        await supabase.rpc('exec_sql', { sql_query: academicsMigrations });
-        await supabase.rpc('exec_sql', { sql_query: studentMigrations });
-        await supabase.rpc('exec_sql', { sql_query: staffMigrations });
-        await supabase.rpc('exec_sql', { sql_query: feeMigrations });
+        const examinationMigrations = `
+          -- Exams Table
+          CREATE TABLE IF NOT EXISTS exams (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            exam_name TEXT UNIQUE,
+            exam_type TEXT DEFAULT 'Main',
+            start_date DATE,
+            end_date DATE,
+            status TEXT DEFAULT 'Upcoming',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure all columns exist and relax legacy ones
+          ALTER TABLE IF EXISTS exams ADD COLUMN IF NOT EXISTS exam_name TEXT;
+          ALTER TABLE IF EXISTS exams ADD COLUMN IF NOT EXISTS exam_type TEXT DEFAULT 'Main';
+          ALTER TABLE IF EXISTS exams ADD COLUMN IF NOT EXISTS start_date DATE;
+          ALTER TABLE IF EXISTS exams ADD COLUMN IF NOT EXISTS end_date DATE;
+          ALTER TABLE IF EXISTS exams ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Upcoming';
+
+          DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'name') THEN
+              ALTER TABLE exams ALTER COLUMN "name" DROP NOT NULL;
+            END IF;
+          END $$;
+
+          -- Schedules Table
+          CREATE TABLE IF NOT EXISTS exam_schedules (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            exam_name TEXT,
+            class_name TEXT,
+            section_name TEXT,
+            subject TEXT,
+            exam_date DATE,
+            start_time TIME,
+            end_time TIME,
+            room_number TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure schedule columns exist and relax legacy ones
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS exam_name TEXT;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS class_name TEXT;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS section_name TEXT;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS subject TEXT;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS exam_date DATE;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS start_time TIME;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS end_time TIME;
+          ALTER TABLE IF EXISTS exam_schedules ADD COLUMN IF NOT EXISTS room_number TEXT;
+
+          DO $$ BEGIN
+            -- Drop NOT NULL from any legacy columns that might exist
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'class') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "class" DROP NOT NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'section') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "section" DROP NOT NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'subject') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "subject" DROP NOT NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'exam_id') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "exam_id" DROP NOT NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'date') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "date" DROP NOT NULL;
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'start_time') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "start_time" DROP NOT NULL;
+            END IF;
+             IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'end_time') THEN 
+              ALTER TABLE exam_schedules ALTER COLUMN "end_time" DROP NOT NULL;
+            END IF;
+          END $$;
+
+          -- Results Table
+          CREATE TABLE IF NOT EXISTS exam_results (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            exam_name TEXT,
+            student_id TEXT,
+            subject TEXT,
+            marks_obtained NUMERIC,
+            max_marks NUMERIC,
+            feedback TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure results columns exist
+          ALTER TABLE IF EXISTS exam_results ADD COLUMN IF NOT EXISTS exam_name TEXT;
+          ALTER TABLE IF EXISTS exam_results ADD COLUMN IF NOT EXISTS student_id TEXT;
+          ALTER TABLE IF EXISTS exam_results ADD COLUMN IF NOT EXISTS subject TEXT;
+        `;
+
+        const reportCardMigrations = `
+          CREATE TABLE IF NOT EXISTS report_card_templates (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            template_name TEXT UNIQUE,
+            terms JSONB DEFAULT '[]'::jsonb,
+            subjects JSONB DEFAULT '[]'::jsonb,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          CREATE TABLE IF NOT EXISTS report_cards (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            student_id TEXT NOT NULL,
+            template_id UUID REFERENCES report_card_templates(id),
+            term_data JSONB DEFAULT '{}'::jsonb,
+            result TEXT,
+            aggregate NUMERIC,
+            percentage NUMERIC,
+            rank TEXT,
+            promotion_status TEXT,
+            teacher_comments TEXT,
+            is_published BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure all columns exist and relax legacy ones
+          ALTER TABLE IF EXISTS report_card_templates ADD COLUMN IF NOT EXISTS template_name TEXT;
+          ALTER TABLE IF EXISTS report_card_templates ADD COLUMN IF NOT EXISTS terms JSONB DEFAULT '[]'::jsonb;
+          ALTER TABLE IF EXISTS report_card_templates ADD COLUMN IF NOT EXISTS subjects JSONB DEFAULT '[]'::jsonb;
+
+          DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'report_card_templates' AND column_name = 'name') THEN
+              ALTER TABLE report_card_templates ALTER COLUMN "name" DROP NOT NULL;
+            END IF;
+          END $$;
+        `;
+
+        try {
+          const { data: res1, error: err1 } = await supabase.rpc('exec_sql', { sql_query: securityMigrations });
+          if (err1) console.error('Security Migrations Error:', err1);
+          
+          const { data: resExam, error: errExam } = await supabase.rpc('exec_sql', { sql_query: examinationMigrations });
+          if (errExam) console.error('Examination Migrations Error:', errExam);
+
+          const { data: resReport, error: errReport } = await supabase.rpc('exec_sql', { sql_query: reportCardMigrations });
+          if (errReport) console.error('Report Card Migrations Error:', errReport);
+          
+          const { data: res2, error: err2 } = await supabase.rpc('exec_sql', { sql_query: academicsMigrations });
+          if (err2) console.error('Academic Migrations Error:', err2);
+          
+          const { data: res3, error: err3 } = await supabase.rpc('exec_sql', { sql_query: studentMigrations });
+          if (err3) console.error('Student Migrations Error:', err3);
+          
+          const { data: res4, error: err4 } = await supabase.rpc('exec_sql', { sql_query: staffMigrations });
+          if (err4) console.error('Staff Migrations Error:', err4);
+          
+          const { data: res5, error: err5 } = await supabase.rpc('exec_sql', { sql_query: feeMigrations });
+          if (err5) console.error('Fee Migrations Error:', err5);
+        } catch (migrationErr) {
+          console.error('Migration execution failed:', migrationErr);
+        }
         
       } catch (err) {
         console.warn('Migration error (might be expected if exec_sql is missing or schema is up to date):', err);
@@ -13624,16 +13946,16 @@ export default function App() {
       const { data: fTypes } = await supabase.from('fee_types').select('*');
       if (fTypes) setFeeTypes(fTypes.map(ft => ({ id: ft.id, name: ft.name, description: ft.description })));
 
-      const { data: fMaster } = await supabase.from('fee_master').select('*');
-      if (fMaster) setFeeMaster(fMaster.map(fm => ({
-        id: fm.id,
-        class: fm.class_name,
-        feeType: fm.fee_type,
-        amount: fm.amount,
-        frequency: fm.frequency,
-        studentType: fm.student_type,
-        session: fm.academic_session
-      })));
+        const { data: fMaster } = await supabase.from('fee_master').select('*');
+        if (fMaster) setFeeMaster(fMaster.map(fm => ({
+          id: fm.id,
+          class: fm.class_name || fm.class,
+          feeType: fm.fee_type,
+          amount: fm.amount,
+          frequency: fm.frequency,
+          studentType: fm.student_type,
+          session: fm.academic_session || fm.session
+        })));
 
       const { data: feeData } = await supabase.from('fee_collections').select('*');
       if (feeData) setFeeTransactions(feeData.map(ft => ({
@@ -13657,11 +13979,24 @@ export default function App() {
         date: ft.date,
         dueDate: ft.due_date,
         status: ft.status,
-        breakdown: ft.breakdown
+        breakdown: ft.breakdown,
+        session: ft.academic_session
       })));
 
-      const { data: cEntries } = await supabase.from('contra_entries').select('*');
-      if (cEntries) setContraEntries(cEntries);
+      const { data: cEntries, error: cError } = await supabase.from('contra_entries').select('*').order('created_at', { ascending: false });
+      if (cError) console.error('Error fetching contra entries:', cError);
+      if (cEntries) {
+        setContraEntries(cEntries);
+        // Sync adjustmentLogs with contraEntries from DB
+        setAdjustmentLogs(cEntries.map(ce => ({
+          id: ce.id,
+          type: ce.type,
+          amount: ce.amount,
+          reference: ce.reference,
+          date: ce.date,
+          timestamp: ce.created_at ? new Date(ce.created_at).toLocaleString() : ce.date
+        })));
+      }
 
       // Calculate Balances
       if (feeData && cEntries) {
@@ -13883,8 +14218,9 @@ export default function App() {
       const { data: eResults } = await supabase.from('exam_results').select('*');
       if (eResults) setExamResults(eResults.map(er => ({
         id: er.id,
-        examScheduleId: er.exam_name,
+        examName: er.exam_name,
         studentId: er.student_id,
+        subject: er.subject,
         marks: er.marks_obtained,
         maxMarks: er.max_marks,
         feedback: er.feedback
@@ -19534,12 +19870,11 @@ const ExaminationModule = ({
 
     const schedule = examSchedules.find((s: any) => s.id === scheduleId);
     if (!schedule) return;
-    const exam = exams.find((e: any) => e.id === schedule.examId);
-    if (!exam) return;
-
+    const examName = schedule.examId; // This was stored as legacy name or new exam_name
+    
     try {
       const payload = {
-        exam_name: exam.name,
+        exam_name: examName,
         student_id: studentId,
         subject: schedule.subject,
         marks_obtained: Number(data.marks),
@@ -19547,7 +19882,11 @@ const ExaminationModule = ({
         feedback: data.feedback || ''
       };
 
-      const existingIdx = examResults.findIndex((r: any) => r.examName === exam.name && r.studentId === studentId && r.subject === schedule.subject);
+      const existingIdx = examResults.findIndex((r: any) => 
+        r.examName === examName && 
+        r.studentId === studentId && 
+        r.subject === schedule.subject
+      );
       
       if (existingIdx > -1) {
         const existingId = examResults[existingIdx].id;
@@ -20167,10 +20506,12 @@ const ExaminationModule = ({
                             </td>
                             <td className="py-4 px-4 text-right flex items-center justify-end gap-2">
                               <button 
+                                disabled={reportCardTemplates.length === 0}
                                 onClick={() => setSelectedReportStudent(student)}
-                                className="text-primary hover:text-primary-dark font-bold text-sm"
+                                className={`font-bold text-sm transition-all ${reportCardTemplates.length === 0 ? 'text-slate-400 cursor-not-allowed' : 'text-primary hover:text-primary-dark'}`}
+                                title={reportCardTemplates.length === 0 ? "Create a template first" : "Generate Report Card"}
                               >
-                                {reportCard ? 'Edit Report' : 'Generate'}
+                                {reportCardTemplates.length === 0 ? "No Template" : (reportCard ? 'Edit Report' : 'Generate Card')}
                               </button>
                               {reportCard && (
                                 <button 
@@ -20210,7 +20551,7 @@ const ExaminationModule = ({
             {selectedReportStudent && (
               <ReportCardEditor 
                 student={selectedReportStudent}
-                template={reportCardTemplates[0]} // Using first template for now
+                template={reportCardTemplates.find(t => t.subjects && t.subjects.length > 0) || reportCardTemplates[0]}
                 reportCard={reportCards.find(rc => rc.studentId === selectedReportStudent.studentId)}
                 onClose={() => setSelectedReportStudent(null)}
                 onSave={async (data: any) => {

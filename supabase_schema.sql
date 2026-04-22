@@ -33,6 +33,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- Allow anyone to execute migrations for setup (Be careful in production)
+GRANT EXECUTE ON FUNCTION exec_sql(text) TO anon, authenticated, service_role;
+
 -- Master Data Management
 CREATE TABLE IF NOT EXISTS academic_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -161,13 +164,15 @@ CREATE TABLE IF NOT EXISTS students (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     student_id TEXT UNIQUE NOT NULL,
     title TEXT,
-    first_name TEXT NOT NULL,
-    surname TEXT NOT NULL,
+    first_name TEXT, -- Relaxed NOT NULL
+    surname TEXT,    -- Relaxed NOT NULL
     student_type TEXT DEFAULT 'Old',
     academic_session TEXT,
     class_name TEXT NOT NULL,
     section_name TEXT NOT NULL,
     roll_number TEXT,
+    -- Legacy support
+    name TEXT,
     caste TEXT,
     category TEXT,
     religion TEXT,
@@ -413,36 +418,47 @@ CREATE TABLE IF NOT EXISTS time_table (
 
 CREATE TABLE IF NOT EXISTS teacher_assignments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    academic_session TEXT NOT NULL,
-    class_name TEXT NOT NULL,
-    section_name TEXT NOT NULL,
+    academic_session TEXT, -- Relaxed NOT NULL
+    class_name TEXT,       -- Relaxed NOT NULL
+    section_name TEXT,     -- Relaxed NOT NULL
     class_teacher_name TEXT,
     subject_teacher_assignments JSONB, -- Array of {subject, teacher}
+    -- Legacy columns (for old queries/inserts)
+    session TEXT,
+    class TEXT,
+    section TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS syllabus (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    class_name TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    title TEXT NOT NULL,
+    class_name TEXT,
+    subject TEXT,
+    title TEXT,
     description TEXT,
     file_url TEXT,
+    academic_session TEXT,
     posted_date DATE DEFAULT CURRENT_DATE,
     status TEXT DEFAULT 'Not Started',
+    -- Legacy columns
+    class TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS homework (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    class_name TEXT NOT NULL,
-    section_name TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    title TEXT NOT NULL,
+    class_name TEXT,
+    section_name TEXT,
+    subject TEXT,
+    title TEXT,
     instructions TEXT,
+    academic_session TEXT,
     due_date DATE,
     file_url TEXT,
     posted_date DATE DEFAULT CURRENT_DATE,
+    -- Legacy columns
+    class TEXT,
+    section TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -683,3 +699,163 @@ ADD COLUMN IF NOT EXISTS collected_by TEXT,
 ADD COLUMN IF NOT EXISTS due_date DATE,
 ADD COLUMN IF NOT EXISTS status TEXT,
 ADD COLUMN IF NOT EXISTS breakdown JSONB;
+
+-- Standardizing fee_master columns
+ALTER TABLE IF EXISTS public.fee_master ADD COLUMN IF NOT EXISTS class_name TEXT;
+ALTER TABLE IF EXISTS public.fee_master ADD COLUMN IF NOT EXISTS fee_type TEXT;
+ALTER TABLE IF EXISTS public.fee_master ADD COLUMN IF NOT EXISTS amount NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS public.fee_master ADD COLUMN IF NOT EXISTS frequency TEXT;
+ALTER TABLE IF EXISTS public.fee_master ADD COLUMN IF NOT EXISTS student_type TEXT DEFAULT 'Both';
+ALTER TABLE IF EXISTS public.fee_master ADD COLUMN IF NOT EXISTS academic_session TEXT;
+
+-- Standardizing fee_collections columns
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS fine NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS discount NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS scholarship NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS month TEXT;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS discount_reason TEXT;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS collected_by TEXT;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE IF EXISTS public.fee_collections ADD COLUMN IF NOT EXISTS breakdown JSONB;
+
+-- Ensure standard fee_types exist
+INSERT INTO fee_types (name, description) VALUES 
+('Admission Fee', 'One-time fee for new students'),
+('Re-admission Fee', 'Annual fee for old students'),
+('Hostel Fee', 'Monthly fee for hostel residents'),
+('Tuition Fee', 'Monthly tuition fee'),
+('Examination Fee', 'Termly exam fee'),
+('Transport Fee', 'Monthly transport fee'),
+('Computer Fee', 'Monthly computer lab fee'),
+('Library Fee', 'Annual library fee'),
+('Annual Fee', 'General annual charges')
+ON CONFLICT (name) DO NOTHING;
+
+-- Financial Table Standardization
+ALTER TABLE IF EXISTS public.income_heads ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE IF EXISTS public.income_heads ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS public.expense_heads ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE IF EXISTS public.expense_heads ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS public.incomes ADD COLUMN IF NOT EXISTS income_head TEXT;
+ALTER TABLE IF EXISTS public.expenses ADD COLUMN IF NOT EXISTS expense_head TEXT;
+
+-- Academics Module missing columns fixes and NOT NULL relaxations
+DO $$ 
+BEGIN 
+    -- Teacher Assignments
+    ALTER TABLE IF EXISTS public.teacher_assignments ADD COLUMN IF NOT EXISTS academic_session TEXT;
+    ALTER TABLE IF EXISTS public.teacher_assignments ADD COLUMN IF NOT EXISTS class_name TEXT;
+    ALTER TABLE IF EXISTS public.teacher_assignments ADD COLUMN IF NOT EXISTS section_name TEXT;
+    ALTER TABLE IF EXISTS public.teacher_assignments ALTER COLUMN academic_session DROP NOT NULL;
+    ALTER TABLE IF EXISTS public.teacher_assignments ALTER COLUMN class_name DROP NOT NULL;
+    ALTER TABLE IF EXISTS public.teacher_assignments ALTER COLUMN section_name DROP NOT NULL;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'class') THEN 
+        EXECUTE 'ALTER TABLE teacher_assignments ALTER COLUMN "class" DROP NOT NULL'; 
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'section') THEN 
+        EXECUTE 'ALTER TABLE teacher_assignments ALTER COLUMN "section" DROP NOT NULL'; 
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teacher_assignments' AND column_name = 'session') THEN 
+        EXECUTE 'ALTER TABLE teacher_assignments ALTER COLUMN "session" DROP NOT NULL'; 
+    END IF;
+
+    -- Syllabus
+    ALTER TABLE IF EXISTS public.syllabus ADD COLUMN IF NOT EXISTS class_name TEXT;
+    ALTER TABLE IF EXISTS public.syllabus ADD COLUMN IF NOT EXISTS academic_session TEXT;
+    ALTER TABLE IF EXISTS public.syllabus ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Not Started';
+    ALTER TABLE IF EXISTS public.syllabus ALTER COLUMN class_name DROP NOT NULL;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'syllabus' AND column_name = 'class') THEN 
+        EXECUTE 'ALTER TABLE syllabus ALTER COLUMN "class" DROP NOT NULL'; 
+    END IF;
+
+    -- Homework
+    ALTER TABLE IF EXISTS public.homework ADD COLUMN IF NOT EXISTS class_name TEXT;
+    ALTER TABLE IF EXISTS public.homework ADD COLUMN IF NOT EXISTS section_name TEXT;
+    ALTER TABLE IF EXISTS public.homework ADD COLUMN IF NOT EXISTS subject TEXT;
+    ALTER TABLE IF EXISTS public.homework ADD COLUMN IF NOT EXISTS academic_session TEXT;
+    ALTER TABLE IF EXISTS public.homework ALTER COLUMN class_name DROP NOT NULL;
+    ALTER TABLE IF EXISTS public.homework ALTER COLUMN section_name DROP NOT NULL;
+    ALTER TABLE IF EXISTS public.homework ALTER COLUMN subject DROP NOT NULL;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'homework' AND column_name = 'class') THEN 
+        EXECUTE 'ALTER TABLE homework ALTER COLUMN "class" DROP NOT NULL'; 
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'homework' AND column_name = 'section') THEN 
+        EXECUTE 'ALTER TABLE homework ALTER COLUMN "section" DROP NOT NULL'; 
+    END IF;
+
+    -- Exams
+    ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS exam_name TEXT;
+    ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS exam_type TEXT DEFAULT 'Main';
+    ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS start_date DATE;
+    ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS end_date DATE;
+    ALTER TABLE IF EXISTS public.exams ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Upcoming';
+
+    -- Relax legacy NOT NULLs for Exams
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'name') THEN
+        ALTER TABLE public.exams ALTER COLUMN "name" DROP NOT NULL;
+    END IF;
+
+    -- Rename 'name' to 'exam_name' logic
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'name') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exams' AND column_name = 'exam_name') THEN
+            UPDATE public.exams SET exam_name = name WHERE exam_name IS NULL;
+        ELSE
+            ALTER TABLE public.exams RENAME COLUMN "name" TO "exam_name";
+        END IF;
+    END IF;
+
+    -- Exam Schedules
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS exam_name TEXT;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS class_name TEXT;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS section_name TEXT;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS subject TEXT;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS exam_date DATE;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS start_time TIME;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS end_time TIME;
+
+    -- Relax legacy NOT NULLs for Exam Schedules
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'class') THEN 
+        ALTER TABLE public.exam_schedules ALTER COLUMN "class" DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'section') THEN 
+        ALTER TABLE public.exam_schedules ALTER COLUMN "section" DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'subject') THEN 
+        ALTER TABLE public.exam_schedules ALTER COLUMN "subject" DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'exam_id') THEN 
+        ALTER TABLE public.exam_schedules ALTER COLUMN "exam_id" DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'exam_name') THEN 
+        ALTER TABLE public.exam_schedules ALTER COLUMN "exam_name" DROP NOT NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'date') THEN 
+        ALTER TABLE public.exam_schedules ALTER COLUMN "date" DROP NOT NULL;
+    END IF;
+
+    -- Report Card Templates
+    ALTER TABLE IF EXISTS public.report_card_templates ADD COLUMN IF NOT EXISTS template_name TEXT;
+    ALTER TABLE IF EXISTS public.report_card_templates ADD COLUMN IF NOT EXISTS terms JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE IF EXISTS public.report_card_templates ADD COLUMN IF NOT EXISTS subjects JSONB DEFAULT '[]'::jsonb;
+
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'report_card_templates' AND column_name = 'name') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'report_card_templates' AND column_name = 'template_name') THEN
+            UPDATE public.report_card_templates SET template_name = name WHERE template_name IS NULL;
+            ALTER TABLE public.report_card_templates ALTER COLUMN "name" DROP NOT NULL;
+        ELSE
+            ALTER TABLE public.report_card_templates RENAME COLUMN "name" TO "template_name";
+        END IF;
+    END IF;
+END $$;
+
+-- GRANT PERMISSIONS SO THE APP CAN AUTO-FIX LATER
+GRANT EXECUTE ON FUNCTION exec_sql(text) TO anon, authenticated, service_role;
+
+-- REFRESH CACHE
+NOTIFY pgrst, 'reload schema';
