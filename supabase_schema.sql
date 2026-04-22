@@ -811,6 +811,7 @@ BEGIN
     END IF;
 
     -- Exam Schedules
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS exam_id UUID REFERENCES public.exams(id) ON DELETE CASCADE;
     ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS exam_name TEXT;
     ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS class_name TEXT;
     ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS section_name TEXT;
@@ -818,6 +819,11 @@ BEGIN
     ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS exam_date DATE;
     ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS start_time TIME;
     ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS end_time TIME;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS question_paper_url TEXT;
+    ALTER TABLE IF EXISTS public.exam_schedules ADD COLUMN IF NOT EXISTS answer_sheet_url TEXT;
+
+    -- Backfill exam_id if possible
+    UPDATE public.exam_schedules es SET exam_id = e.id FROM public.exams e WHERE es.exam_name = e.exam_name AND es.exam_id IS NULL;
 
     -- Relax legacy NOT NULLs for Exam Schedules
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'exam_schedules' AND column_name = 'class') THEN 
