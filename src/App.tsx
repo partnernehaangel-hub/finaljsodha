@@ -118,6 +118,23 @@ import { SqlEditor } from './components/SqlEditor';
 
 type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'student-panel' | 'leave-management' | 'reports' | 'calendar' | 'human-resource' | 'staff-attendance' | 'communicate' | 'front-office' | 'income-expense' | 'profile-settings' | 'user-logs' | 'super-admin-panel' | 'sql-editor';
 
+// --- Utilities ---
+
+const extractIdFromQR = (text: string, paramName: string = 'id') => {
+  if (text && text.startsWith('http')) {
+    try {
+      const url = new URL(text);
+      const val = url.searchParams.get(paramName);
+      if (val) return val;
+      // Fallback: try to get any query param if 'id' or specified isn't there
+      return url.searchParams.get('id') || url.searchParams.get('token') || text;
+    } catch (e) {
+      return text;
+    }
+  }
+  return text;
+};
+
 interface User {
   id: string;
   name: string;
@@ -635,7 +652,7 @@ const ReportCardView = ({ student, template, reportCard, schoolProfile }: { stud
         
         <div className="text-right flex flex-col items-end gap-2">
           <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-300">
-            <QRCode value={`${student.name}-${student.studentId}`} size={48} />
+            <QRCode value={`${window.location.origin}?id=${student.studentId}`} size={48} />
           </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Digital Verification</p>
         </div>
@@ -2253,7 +2270,8 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
   };
 
   function onScanSuccess(decodedText: string) {
-    const student = students.find((s: any) => s.studentId === decodedText);
+    const id = extractIdFromQR(decodedText, 'id');
+    const student = students.find((s: any) => s.studentId === id);
     if (student) {
       markAttendance(student, 'Present');
       playBeep();
@@ -9419,7 +9437,8 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
   }, [activeTab, scanning]);
 
   const handleScan = (decodedText: string) => {
-    if (decodedText === schoolAttendanceToken) {
+    const token = extractIdFromQR(decodedText, 'token');
+    if (token === schoolAttendanceToken) {
       playBeep();
       markAttendance();
     } else {
@@ -9554,7 +9573,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
           
           <div className="p-8 bg-white rounded-3xl shadow-2xl border-8 border-primary/10">
             <QRCode 
-              value={schoolAttendanceToken}
+              value={`${window.location.origin}/staff-attendance?token=${schoolAttendanceToken}`}
               size={256}
               level="H"
               style={{ height: "auto", maxWidth: "100%", width: "100%" }}
@@ -13313,7 +13332,7 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
 const downloadAPK = (type: 'student' | 'staff') => {
   // We cannot generate a valid binary APK file directly from browser memory.
   // Instead, we provide the user with the REAL live link to the software.
-  const appUrl = 'https://ais-pre-m2mtvrowsxacw5pnvzuipc-44801460094.asia-southeast1.run.app';
+  const appUrl = window.location.origin;
   
   const modalHtml = `
     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: sans-serif; padding: 20px;">
@@ -15216,7 +15235,7 @@ const schoolMigrations = `
 
   const handleLogin = async (e?: React.FormEvent, scannedId?: string) => {
     if (e) e.preventDefault();
-    const id = scannedId || loginId;
+    const id = extractIdFromQR(scannedId || loginId, 'id');
 
     // Super Admin Check
     if (id === 'DC0018' && loginPassword === 'Durgamaa@18') {
@@ -17259,7 +17278,7 @@ const schoolMigrations = `
                                   title="Click to view QR Code"
                                 >
                                   <QRCode 
-                                    value={s.studentId || s.id}
+                                    value={`${window.location.origin}?id=${s.studentId || s.id}`}
                                     size={32}
                                     className="w-full h-full"
                                   />
@@ -18459,7 +18478,7 @@ const schoolMigrations = `
               <div className="p-8 pt-0 flex flex-col items-center">
                 <div className="bg-white p-6 rounded-3xl border-4 border-slate-50 shadow-inner mb-6">
                   <QRCode 
-                    value={selectedStudentQR.studentId || selectedStudentQR.id}
+                    value={`${window.location.origin}?id=${selectedStudentQR.studentId || selectedStudentQR.id}`}
                     size={200}
                     level="H"
                   />
@@ -19671,7 +19690,7 @@ const IDCardsModule = ({
           {orientation === 'landscape' && (
             <div className="mt-4 w-20 h-20 bg-white rounded-xl p-1 shadow-inner flex items-center justify-center">
               <QRCode 
-                value={person.staffId || person.studentId || person.id || 'TCH-12345'}
+                value={`${window.location.origin}?id=${person.staffId || person.studentId || person.id || 'TCH-12345'}`}
                 size={80}
                 level="H"
                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
@@ -19691,7 +19710,7 @@ const IDCardsModule = ({
               </div>
               <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-sm border border-slate-100 flex items-center justify-center">
                 <QRCode 
-                  value={person.staffId || person.studentId || person.id || 'TCH-12345'}
+                  value={`${window.location.origin}?id=${person.staffId || person.studentId || person.id || 'TCH-12345'}`}
                   size={80}
                   level="H"
                   style={{ height: "auto", maxWidth: "100%", width: "100%" }}
