@@ -3,7 +3,7 @@ import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs';
 import 'prismjs/components/prism-sql';
 import 'prismjs/themes/prism.css';
-import { Save, Share2, Play, Trash2, Plus, Copy, CheckCircle2 } from 'lucide-react';
+import { Save, Share2, Play, Trash2, Plus, Copy, CheckCircle2, UserCog, Key, Shield, HardDrive } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabase } from '../lib/supabase';
 
@@ -60,7 +60,7 @@ SELECT column_name, data_type
 FROM information_schema.columns 
 WHERE table_name = 'students'
 ORDER BY column_name;`);
-  const [title, setTitle] = useState<string>('New Query');
+  const [title, setTitle] = useState<string>('Super Admin Workspace');
   const [snippets, setSnippets] = useState<SqlSnippet[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [executing, setExecuting] = useState<boolean>(false);
@@ -68,6 +68,21 @@ ORDER BY column_name;`);
   const [error, setError] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+
+  const quickActions = [
+    { label: 'View All Users', icon: UserCog, code: 'SELECT id, username, name, role, password FROM users ORDER BY role DESC;' },
+    { label: 'Reset Admin Pwd', icon: Key, code: "UPDATE users SET password = 'admin@123' WHERE id = 'admin';" },
+    { label: 'Hostel/Accounts Pwd', icon: Shield, code: 'SELECT warden_id, warden_password, accountant_id, accountant_password FROM school_profile;' },
+    { label: 'Fix System Users', icon: HardDrive, code: `-- Ensure system users exist
+INSERT INTO users (id, username, name, role, password)
+VALUES 
+  ('admin', 'admin', 'System Administrator', 'super-admin', 'admin123'),
+  ('warden', 'warden', 'Hostel Warden', 'warden', 'warden123'),
+  ('accountant', 'accountant', 'School Accountant', 'accountant', 'acc123')
+ON CONFLICT (id) DO UPDATE SET 
+  role = EXCLUDED.role,
+  password = EXCLUDED.password;` },
+  ];
 
   useEffect(() => {
     fetchSnippets();
@@ -142,6 +157,12 @@ ORDER BY column_name;`);
       if (data.status === 'error') {
         setError(data.message);
       } else {
+        if (Array.isArray(data)) {
+          setResults(data);
+        } else if (data.status === 'success') {
+          // Some operations return success object
+          setResults([{ status: 'success', message: 'SQL executed successfully' }]);
+        }
         alert('SQL executed successfully!');
         // Refresh snippets if we modified them
         if (code.toLowerCase().includes('sql_snippets')) {
@@ -320,6 +341,23 @@ ORDER BY column_name;`);
                 }}
                 className="outline-none"
               />
+            </div>
+          </div>
+
+          {/* Quick Actions Area */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">System Quick Actions</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {quickActions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => { setCode(action.code); setTitle(action.label); }}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-100 hover:border-primary/30 hover:bg-primary/5 transition-all group"
+                >
+                  <action.icon size={24} className="text-slate-400 group-hover:text-primary mb-2 transition-colors" />
+                  <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-primary tracking-tighter">{action.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 

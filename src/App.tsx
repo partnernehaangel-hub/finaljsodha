@@ -116,12 +116,12 @@ import { SqlEditor } from './components/SqlEditor';
 
 // --- Types ---
 
-type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'student-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign' | 'human-resource' | 'staff-attendance' | 'communicate' | 'front-office' | 'income-expense' | 'profile-settings' | 'user-logs' | 'super-admin-panel' | 'sql-editor';
+type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'student-panel' | 'leave-management' | 'reports' | 'calendar' | 'human-resource' | 'staff-attendance' | 'communicate' | 'front-office' | 'income-expense' | 'profile-settings' | 'user-logs' | 'super-admin-panel' | 'sql-editor';
 
 interface User {
   id: string;
   name: string;
-  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden' | 'staff' | 'super-admin';
+  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden' | 'staff' | 'super-admin' | 'accountant';
   permissions: string[];
   studentId?: string;
   password?: string;
@@ -235,7 +235,7 @@ interface Notification {
   message: string;
   date: string;
   type: 'Info' | 'Warning' | 'Success' | 'Fee';
-  targetRoles: ('admin' | 'teacher' | 'student' | 'parent' | 'staff' | 'warden')[];
+  targetRoles: ('admin' | 'teacher' | 'student' | 'parent' | 'staff' | 'warden' | 'accountant')[];
   targetStudentId?: string;
   isRead?: boolean;
 }
@@ -578,7 +578,7 @@ interface Student {
 
 // --- Report Card Components ---
 
-const ReportCardView = ({ student, template, reportCard }: { student: any, template: ReportCardTemplate, reportCard: ReportCard }) => {
+const ReportCardView = ({ student, template, reportCard, schoolProfile }: { student: any, template: ReportCardTemplate, reportCard: ReportCard, schoolProfile?: any }) => {
   if (!student || !template) {
     return (
       <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
@@ -586,73 +586,167 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
       </div>
     );
   }
+
+  const getGrade = (percentage: number) => {
+    if (percentage >= 91) return { label: 'A+', color: 'text-green-600 bg-green-50' };
+    if (percentage >= 81) return { label: 'A', color: 'text-green-500 bg-green-50' };
+    if (percentage >= 71) return { label: 'B+', color: 'text-blue-600 bg-blue-50' };
+    if (percentage >= 61) return { label: 'B', color: 'text-blue-500 bg-blue-50' };
+    if (percentage >= 51) return { label: 'C+', color: 'text-yellow-600 bg-yellow-50' };
+    if (percentage >= 41) return { label: 'C', color: 'text-yellow-500 bg-yellow-50' };
+    if (percentage >= 31) return { label: 'D+', color: 'text-orange-600 bg-orange-50' };
+    if (percentage >= 21) return { label: 'D', color: 'text-orange-500 bg-orange-50' };
+    return { label: 'E', color: 'text-red-500 bg-red-50' };
+  };
+
+  const getPromotionColor = (status: string) => {
+    if (status?.toLowerCase().includes('pass') || status?.toLowerCase().includes('promoted')) return 'text-green-600 bg-green-50 border-green-200';
+    if (status?.toLowerCase().includes('fail') || status?.toLowerCase().includes('detained')) return 'text-red-600 bg-red-50 border-red-200';
+    return 'text-blue-600 bg-blue-50 border-blue-200';
+  };
+
   return (
-    <div className="bg-white p-8 rounded-none shadow-none border border-slate-300 max-w-4xl mx-auto font-serif text-slate-900">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white p-10 rounded-[2.5rem] shadow-2xl border border-slate-100 max-w-6xl mx-auto font-sans text-slate-900 overflow-hidden relative"
+    >
+      {/* Decorative Elements */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl opacity-50" />
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary/5 rounded-full -ml-32 -mb-32 blur-3xl opacity-50" />
+
       {/* Header */}
-      <div className="text-center mb-8 border-b-2 border-slate-900 pb-4">
-        <h1 className="text-3xl font-bold uppercase tracking-widest mb-1">Academic Progress Report</h1>
-        <p className="text-sm font-bold uppercase tracking-widest">Session 2023-24</p>
+      <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-12 relative z-10 border-b border-slate-100 pb-8">
+        <div className="flex items-center gap-6">
+          <div className="w-24 h-24 bg-primary rounded-3xl flex items-center justify-center shadow-lg shadow-primary/20 rotate-3 p-4">
+            <Building2 className="text-white w-12 h-12 -rotate-3" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase leading-none mb-2">
+              {schoolProfile?.schoolName || "JOSHODA MISSION"}
+            </h1>
+            <p className="text-sm text-text-sub font-bold tracking-widest uppercase mb-1">Academic Progress Report</p>
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-wider text-slate-500">Session 2023-24</span>
+              <span className="px-3 py-1 bg-primary/10 rounded-full text-[10px] font-black uppercase tracking-wider text-primary">Official Records</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="text-right flex flex-col items-end gap-2">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-300">
+            <QRCode value={`${student.name}-${student.studentId}`} size={48} />
+          </div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Digital Verification</p>
+        </div>
       </div>
 
-      {/* Student Info */}
-      <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-        <div className="space-y-1">
-          <p><span className="font-bold uppercase w-24 inline-block">Name:</span> <span className="border-b border-slate-400 px-2">{student.name || ''} {student.surname || ''}</span></p>
-          <p><span className="font-bold uppercase w-24 inline-block">Class:</span> <span className="border-b border-slate-400 px-2">{student.class}</span></p>
+      {/* Student Profile Card */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 relative z-10">
+        <div className="col-span-3 bg-slate-50 p-6 rounded-3xl border border-slate-100 flex items-center gap-6">
+          <div className="w-20 h-20 bg-white rounded-2xl border-4 border-white shadow-sm overflow-hidden flex items-center justify-center relative group">
+            {student.photo ? (
+              <img src={student.photo} alt={student.name} className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-10 h-10 text-slate-200" />
+            )}
+            <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-all" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-text-heading leading-tight">{student.name} {student.surname}</h2>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-text-sub">
+                <ScanLine size={12} className="text-primary" /> ID: <span className="text-text-heading">{student.studentId}</span>
+              </p>
+              <p className="flex items-center gap-1.5 text-xs font-bold text-text-sub">
+                <Building2 size={12} className="text-primary" /> Class: <span className="text-text-heading">{student.class}-{student.section}</span>
+              </p>
+              <p className="flex items-center gap-1.5 text-xs font-bold text-text-sub">
+                <CalendarRange size={12} className="text-primary" /> Roll No: <span className="text-text-heading">{student.rollNo || student.admissionNo || 'N/A'}</span>
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="space-y-1 text-right">
-          <p><span className="font-bold uppercase w-24 inline-block">Section:</span> <span className="border-b border-slate-400 px-2">{student.section}</span></p>
+        
+        <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 flex flex-col items-center justify-center text-center">
+          <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Final Result</p>
+          <p className={`text-xl font-black uppercase tracking-tighter ${reportCard?.promotionStatus?.toLowerCase().includes('fail') ? 'text-red-600' : 'text-green-600'}`}>
+            {reportCard?.promotionStatus || 'PENDING'}
+          </p>
         </div>
       </div>
 
       {/* Marks Table */}
-      <div className="overflow-x-auto mb-6">
-        <table className="w-full border-collapse border-2 border-slate-900 text-xs">
+      <div className="overflow-x-auto mb-10 overflow-hidden rounded-[2rem] border border-slate-200 shadow-sm bg-white">
+        <table className="w-full border-collapse text-[11px]">
           <thead>
-            <tr>
-              <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Subject</th>
+            <tr className="bg-slate-900 text-white">
+              <th rowSpan={2} className="p-4 text-left font-black uppercase tracking-widest w-40 border-r border-slate-800">Learning Area / Subject</th>
               {(template.terms || []).map((term: any) => (
-                <th key={term.id} colSpan={(term.subColumns || []).length + 1} className="border-2 border-slate-900 p-1 bg-slate-50">{term.name}</th>
+                <th key={term.id} colSpan={(term.subColumns || []).length + 1} className="p-3 text-center font-black uppercase tracking-widest border-r border-slate-800 border-b border-slate-800">{term.name}</th>
               ))}
-              <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Total</th>
-              <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Grade</th>
+              <th colSpan={4} className="p-3 text-center font-black uppercase tracking-widest bg-primary">Final Cumulative Assessment (50/50)</th>
             </tr>
-            <tr>
+            <tr className="bg-slate-800 text-slate-300">
               {(template.terms || []).map((term: any) => (
                 <React.Fragment key={term.id}>
                   {(term.subColumns || []).map((col: any) => (
-                    <th key={col.id} className="border-2 border-slate-900 p-1 font-normal">{col.name}</th>
+                    <th key={col.id} className="p-2 text-center font-bold uppercase tracking-tight text-[9px] border-r border-slate-700">
+                      {col.name} <div className="text-[8px] opacity-60">({col.maxMarks})</div>
+                    </th>
                   ))}
-                  <th className="border-2 border-slate-900 p-1 font-bold">TOTAL</th>
+                  <th className="p-2 text-center font-black uppercase tracking-widest bg-slate-700 text-white border-r border-slate-600">Total</th>
                 </React.Fragment>
               ))}
+              <th className="p-2 text-center font-black uppercase tracking-widest bg-orange-500/20 text-orange-400 border-r border-slate-700">T1 50%</th>
+              <th className="p-2 text-center font-black uppercase tracking-widest bg-green-500/20 text-green-400 border-r border-slate-700">T2 50%</th>
+              <th className="p-2 text-center font-black uppercase tracking-widest bg-blue-500/20 text-blue-400 border-r border-slate-700">Result</th>
+              <th className="p-2 text-center font-black uppercase tracking-widest bg-slate-700 text-white">Grade</th>
             </tr>
           </thead>
-          <tbody>
-            {(template.subjects || []).map((subject: any) => {
-              let grandTotal = 0;
+          <tbody className="font-medium text-slate-600">
+            {(template.subjects || []).map((subject: any, idx: number) => {
+              const termResults: any = {};
+              (template.terms || []).forEach((term: any) => {
+                let termTotal = 0;
+                (term.subColumns || []).forEach((col: any) => {
+                  const val = reportCard?.termData?.[term.id]?.subjects?.[subject]?.[col.id] || 0;
+                  termTotal += Number(val);
+                });
+                termResults[term.id] = termTotal;
+              });
+
+              const t1Id = template.terms?.[0]?.id;
+              const t2Id = template.terms?.[1]?.id;
+              const t1Total = termResults[t1Id] || 0;
+              const t2Total = termResults[t2Id] || 0;
+              
+              const t1Weighted = Number((t1Total / 2).toFixed(1));
+              const t2Weighted = Number((t2Total / 2).toFixed(1));
+              const finalResult = t1Weighted + t2Weighted;
+              const gradeData = getGrade(finalResult);
+
               return (
-                <tr key={subject}>
-                  <td className="border-2 border-slate-900 p-2 font-bold">{subject}</td>
+                <tr key={subject} className={`group hover:bg-slate-50 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
+                  <td className="p-4 border-r border-slate-100 font-black text-text-heading uppercase tracking-tight">{subject}</td>
                   {(template.terms || []).map((term: any) => {
-                    let termTotal = 0;
                     return (
                       <React.Fragment key={term.id}>
                         {(term.subColumns || []).map((col: any) => {
                           const val = reportCard?.termData?.[term.id]?.subjects?.[subject]?.[col.id] || 0;
-                          termTotal += Number(val);
-                          return <td key={col.id} className="border-2 border-slate-900 p-1 text-center">{val || '-'}</td>;
+                          return <td key={col.id} className="p-2 text-center border-r border-slate-100 font-bold">{val || '-'}</td>;
                         })}
-                        <td className="border-2 border-slate-900 p-1 text-center font-bold bg-slate-50">
-                          {termTotal || '-'}
-                          {(() => { grandTotal += termTotal; return null; })()}
+                        <td className="p-2 text-center font-black text-text-heading bg-slate-50/50 border-r border-slate-100">
+                          {termResults[term.id] || '0'}
                         </td>
                       </React.Fragment>
                     );
                   })}
-                  <td className="border-2 border-slate-900 p-2 text-center font-bold bg-slate-100">{grandTotal || '-'}</td>
-                  <td className="border-2 border-slate-900 p-2 text-center font-bold">
-                    {grandTotal >= 180 ? 'A+' : grandTotal >= 160 ? 'A' : grandTotal >= 140 ? 'B' : grandTotal >= 120 ? 'C' : 'D'}
+                  <td className="p-2 text-center font-black text-orange-600 bg-orange-50/30 border-r border-slate-100">{t1Weighted}</td>
+                  <td className="p-2 text-center font-black text-green-600 bg-green-50/30 border-r border-slate-100">{t2Weighted}</td>
+                  <td className="p-2 text-center font-black text-blue-600 bg-blue-50/30 border-r border-slate-100">{finalResult}</td>
+                  <td className={`p-2 text-center font-black border-l border-slate-200 ${gradeData.color}`}>
+                    {finalResult > 0 ? gradeData.label : '-'}
                   </td>
                 </tr>
               );
@@ -661,46 +755,106 @@ const ReportCardView = ({ student, template, reportCard }: { student: any, templ
         </table>
       </div>
 
-      {/* Footer Info */}
-      <div className="grid grid-cols-3 gap-8 text-xs mb-8">
-        <div className="border-2 border-slate-900 p-4 space-y-2">
-          <p className="font-bold uppercase border-b border-slate-900 pb-1">Attendance</p>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
+        {/* Attendance Summary */}
+        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-4">
+          <div className="flex items-center gap-2 mb-2 text-primary">
+            <CalendarCheck size={18} />
+            <h3 className="text-xs font-black uppercase tracking-widest">Attendance Record</h3>
+          </div>
           {(template.terms || []).map((term: any) => (
-            <p key={term.id} className="flex justify-between">
-              <span>{term.name}:</span>
-              <span className="font-bold">{reportCard?.termData?.[term.id]?.attendance || '-'}</span>
-            </p>
+            <div key={term.id} className="flex justify-between items-center text-xs font-bold border-b border-dashed border-slate-200 pb-2">
+              <span className="text-text-sub uppercase">{term.name}</span>
+              <span className="text-text-heading">{reportCard?.termData?.[term.id]?.attendance || '0'} / 365 Days</span>
+            </div>
           ))}
         </div>
-        <div className="border-2 border-slate-900 p-4 space-y-2">
-          <p className="font-bold uppercase border-b border-slate-900 pb-1">Result Summary</p>
-          <p className="flex justify-between"><span>Aggregate:</span> <span className="font-bold">{reportCard?.aggregate || '-'}</span></p>
-          <p className="flex justify-between"><span>Percentage:</span> <span className="font-bold">{reportCard?.percentage || '-'}%</span></p>
-          <p className="flex justify-between"><span>Rank:</span> <span className="font-bold">{reportCard?.rank || '-'}</span></p>
+
+        {/* Academic Summary */}
+        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-4">
+          <div className="flex items-center gap-2 mb-2 text-primary">
+            <Trophy size={18} />
+            <h3 className="text-xs font-black uppercase tracking-widest">Academic Summary</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between text-xs font-bold"><span className="text-text-sub uppercase">Aggregate</span> <span className="text-text-heading">{reportCard?.aggregate || '0.0'}</span></div>
+            <div className="flex justify-between text-xs font-bold"><span className="text-text-sub uppercase">Percentage</span> <span className="text-text-heading">{reportCard?.percentage || '0.0'}%</span></div>
+            <div className="flex justify-between text-xs font-bold"><span className="text-text-sub uppercase">Class Rank</span> <span className="text-text-heading font-black text-primary bg-primary/10 px-2 py-0.5 rounded-lg">{reportCard?.rank || 'N/A'}</span></div>
+          </div>
         </div>
-        <div className="border-2 border-slate-900 p-4 space-y-2">
-          <p className="font-bold uppercase border-b border-slate-900 pb-1">Final Result</p>
-          <p className="text-center text-lg font-black pt-2 text-primary">{reportCard?.promotionStatus || 'PENDING'}</p>
+
+        {/* Remarks Section */}
+        <div className="lg:col-span-2 bg-slate-50 p-6 rounded-3xl border border-slate-100 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 text-slate-100 group-hover:text-primary/10 transition-all">
+            <MessageSquare size={48} />
+          </div>
+          <div className="flex items-center gap-2 mb-4 text-primary">
+            <Sparkles size={18} />
+            <h3 className="text-xs font-black uppercase tracking-widest">Staff Review & Remarks</h3>
+          </div>
+          <p className="italic text-sm text-text-heading leading-relaxed relative z-10">
+            "{reportCard?.teacherComments || "Student demonstrates consistent effort through the academic session. Focus on mathematical problem solving is recommended for the upcoming term."}"
+          </p>
         </div>
       </div>
 
-      {/* Comments */}
-      <div className="border-2 border-slate-900 p-4 mb-12 min-h-[100px]">
-        <p className="font-bold uppercase text-xs mb-2">Class Teacher's Remarks:</p>
-        <p className="italic text-sm">"{reportCard?.teacherComments || 'No comments yet.'}"</p>
+      {/* Grading Scale Reference */}
+      <div className="mb-12 p-6 bg-slate-900 rounded-3xl text-white">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-slate-400 text-center">Standard Evaluation Grading Scale</h4>
+        <div className="grid grid-cols-5 md:grid-cols-9 gap-2">
+          {[
+            { g: 'A+', r: '91-100', c: 'bg-green-500' },
+            { g: 'A', r: '81-90', c: 'bg-green-400' },
+            { g: 'B+', r: '71-80', c: 'bg-blue-500' },
+            { g: 'B', r: '61-70', c: 'bg-blue-400' },
+            { g: 'C+', r: '51-60', c: 'bg-yellow-500' },
+            { g: 'C', r: '41-50', c: 'bg-yellow-400' },
+            { g: 'D+', r: '31-40', c: 'bg-orange-500' },
+            { g: 'D', r: '21-30', c: 'bg-orange-400' },
+            { g: 'E', r: '0-20', c: 'bg-red-500' },
+          ].map(item => (
+            <div key={item.g} className="text-center">
+              <div className={`w-full h-1 ${item.c} mb-2 rounded-full`} />
+              <p className="text-xs font-black">{item.g}</p>
+              <p className="text-[8px] opacity-60 font-bold uppercase">{item.r}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Signatures */}
-      <div className="flex justify-between items-end px-4 text-[10px] font-bold uppercase tracking-widest">
-        <div className="text-center border-t border-slate-900 pt-2 w-32">Class Teacher</div>
-        <div className="text-center border-t border-slate-900 pt-2 w-32">Parent/Guardian</div>
-        <div className="text-center border-t border-slate-900 pt-2 w-32">Principal</div>
+      {/* Final Signatures */}
+      <div className="flex flex-col md:flex-row justify-between items-end gap-12 mt-12 px-6">
+        <div className="text-center space-y-4">
+          <div className="w-40 border-b-2 border-slate-200 pb-2 flex flex-col items-center">
+            <div className="w-16 h-8 bg-slate-50 mb-1 rounded italic text-[8px] flex items-center justify-center text-slate-300">Auth Signature</div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-sub">Class Teacher</p>
+          </div>
+        </div>
+        <div className="text-center space-y-4">
+          <div className="w-40 border-b-2 border-slate-200 pb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-sub">Parent/Guardian</p>
+          </div>
+        </div>
+        <div className="text-center space-y-4">
+          <div className="w-40 border-b-2 border-slate-200 pb-2 flex flex-col items-center">
+            <div className="w-24 h-12 bg-primary/5 mb-1 rounded flex items-center justify-center border border-primary/10">
+              <Building2 className="text-primary/20 w-8 h-8" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-sub">School Principal</p>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Footer Branding */}
+      <div className="mt-16 pt-8 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+        <p>© 2024 EDU-PRO SYSTEMS OFFICIAL REPORT</p>
+        <p>Powered by Digital Access Technology</p>
+      </div>
+    </motion.div>
   );
 };
 
-const ReportCardEditor = ({ student, template, reportCard: existingReport, onClose, onSave }: any) => {
+const ReportCardEditor = ({ student, template, reportCard: existingReport, schoolProfile, onClose, onSave }: any) => {
   const [formData, setFormData] = useState<ReportCard>(existingReport || {
     id: Date.now().toString(),
     studentId: student?.studentId || '',
@@ -824,37 +978,39 @@ const ReportCardEditor = ({ student, template, reportCard: existingReport, onClo
                 </div>
               ))}
 
-              <div className="grid grid-cols-3 gap-4">
-                <Input label="Aggregate" value={formData.aggregate} onChange={(e: any) => setFormData({...formData, aggregate: e.target.value})} />
-                <Input label="Percentage" value={formData.percentage} onChange={(e: any) => setFormData({...formData, percentage: e.target.value})} />
-                <Input label="Rank" value={formData.rank} onChange={(e: any) => setFormData({...formData, rank: e.target.value})} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <Input label="Aggregate Score" type="number" placeholder="0.0" value={formData.aggregate} onChange={(e: any) => setFormData({...formData, aggregate: e.target.value})} />
+                <Input label="Percentage (%)" type="number" placeholder="0.0" value={formData.percentage} onChange={(e: any) => setFormData({...formData, percentage: e.target.value})} />
+                <Input label="Class Rank" placeholder="1st / 40" value={formData.rank} onChange={(e: any) => setFormData({...formData, rank: e.target.value})} />
               </div>
 
-              <Select 
-                label="Promotion Status" 
-                options={['Pass/Promoted', 'Detained', 'Supplementary']} 
-                value={formData.promotionStatus}
-                onChange={(e: any) => setFormData({...formData, promotionStatus: e.target.value})}
-              />
-
-              <div className="w-full">
-                <label className="label-text">Teacher's Comments</label>
-                <textarea 
-                  className="input-field min-h-[100px] py-3"
-                  placeholder="Write your comments here..."
-                  value={formData.teacherComments}
-                  onChange={(e: any) => setFormData({...formData, teacherComments: e.target.value})}
-                ></textarea>
-              </div>
-
-              <div className="flex items-center gap-2 p-4 bg-primary/5 rounded-xl border border-primary/10">
-                <input 
-                  type="checkbox" 
-                  id="publish" 
-                  checked={formData.isPublished}
-                  onChange={(e) => setFormData({...formData, isPublished: e.target.checked})}
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                <Select 
+                  label="Promotion Status" 
+                  options={['Pass/Promoted', 'Detained', 'Supplementary', 'Promoted with Grace']} 
+                  value={formData.promotionStatus}
+                  onChange={(e: any) => setFormData({...formData, promotionStatus: e.target.value})}
                 />
-                <label htmlFor="publish" className="text-sm font-bold text-primary cursor-pointer">Publish to Parent Panel</label>
+
+                <div className="w-full">
+                  <label className="text-xs font-black uppercase tracking-widest text-text-sub mb-2 block">Class Teacher's Evaluative Remarks</label>
+                  <textarea 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all min-h-[120px]"
+                    placeholder="Provide constructive feedback on student's performance..."
+                    value={formData.teacherComments}
+                    onChange={(e: any) => setFormData({...formData, teacherComments: e.target.value})}
+                  ></textarea>
+                </div>
+
+                <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-2xl border border-primary/10 group cursor-pointer" onClick={() => setFormData({...formData, isPublished: !formData.isPublished})}>
+                  <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${formData.isPublished ? 'bg-primary border-primary' : 'bg-white border-slate-300'}`}>
+                    {formData.isPublished && <CheckCircle2 className="text-white" size={14} />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-primary uppercase tracking-tight">Ready for Publication</p>
+                    <p className="text-[10px] text-primary/60 font-bold uppercase">This will make the report card visible to the parent dashboard</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -864,7 +1020,7 @@ const ReportCardEditor = ({ student, template, reportCard: existingReport, onClo
                 <Eye size={14} /> Live Preview
               </h3>
               <div className="sticky top-0 scale-[0.8] origin-top">
-                <ReportCardView student={student} template={template} reportCard={formData} />
+                <ReportCardView student={student} template={template} reportCard={formData} schoolProfile={schoolProfile} />
               </div>
             </div>
           </div>
@@ -974,11 +1130,15 @@ const Dashboard = ({
   homeworks,
   leaveRequests,
   getStudentDueFees,
-  notices
+  notices,
+  hostelRooms = [],
+  hostelBeds = [],
+  hostelAttendance = []
 }: any) => {
   const isSuperAdmin = currentUser?.role === 'super-admin';
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
-  const isTeacher = currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden';
+  const isWarden = currentUser?.role === 'warden';
+  const isTeacher = currentUser?.role === 'teacher' || currentUser?.role === 'staff' || isWarden;
   const isStudent = currentUser?.role === 'student' || currentUser?.role === 'parent';
 
   const today = getTodayDate();
@@ -1043,107 +1203,117 @@ const Dashboard = ({
       exit={{ opacity: 0, y: -20 }}
       className="space-y-8"
     >
-      <NoticeTicker notices={notices.filter(n => n.targetRoles?.includes(currentUser.role))} />
+      <NoticeTicker notices={notices.filter(n => n.targetRoles?.includes(currentUser?.role || ''))} />
 
-      {/* Admin/Super Admin View */}
-      {(isSuperAdmin || isAdmin) && (
+      {/* Admin/Super Admin/Accountant View */}
+      {(isSuperAdmin || isAdmin || currentUser?.role === 'accountant') && (
         <>
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
-            <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-white border-none shadow-xl shadow-primary/20">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-white/20 rounded-xl">
-                  <Users size={24} />
+            {(isSuperAdmin || isAdmin) && (
+              <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-white border-none shadow-xl shadow-primary/20">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-white/20 rounded-xl">
+                    <Users size={24} />
+                  </div>
+                  <span className="text-[10px] font-black bg-white/20 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
                 </div>
-                <span className="text-[10px] font-black bg-white/20 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
-              </div>
-              <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Students Present</p>
-              <div className="flex items-end gap-2">
-                <h3 className="text-3xl font-black">
-                  {studentsPresent}
-                </h3>
-                <span className="text-sm font-bold mb-1 opacity-60">/ {students.length}</span>
-              </div>
-              <div className="mt-4 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-white rounded-full" 
-                  style={{ 
-                    width: `${students.length > 0 ? (studentsPresent / students.length) * 100 : 0}%` 
-                  }}
-                ></div>
-              </div>
-              <p className="text-[10px] mt-2 font-black uppercase tracking-widest opacity-80">
-                {students.length > 0 ? Math.round((studentsPresent / students.length) * 100) : 0}% Attendance Rate
-              </p>
-            </Card>
+                <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Students Present</p>
+                <div className="flex items-end gap-2">
+                  <h3 className="text-3xl font-black">
+                    {studentsPresent}
+                  </h3>
+                  <span className="text-sm font-bold mb-1 opacity-60">/ {students.length}</span>
+                </div>
+                <div className="mt-4 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-white rounded-full" 
+                    style={{ 
+                      width: `${students.length > 0 ? (studentsPresent / students.length) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+                <p className="text-[10px] mt-2 font-black uppercase tracking-widest opacity-80">
+                  {students.length > 0 ? Math.round((studentsPresent / students.length) * 100) : 0}% Attendance Rate
+                </p>
+              </Card>
+            )}
 
-            <Card className="p-6 bg-white border-slate-100 shadow-sm">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                  <UserCheck size={24} />
+            {(isSuperAdmin || isAdmin) && (
+              <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                    <UserCheck size={24} />
+                  </div>
+                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
                 </div>
-                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
-              </div>
-              <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Teachers Present</p>
-              <div className="flex items-end gap-2">
-                <h3 className="text-3xl font-black text-text-heading">
-                  {teachersPresent}
-                </h3>
-                <span className="text-sm font-bold text-text-sub mb-1">/ {staff.length || masterData.teachers.length}</span>
-              </div>
-              <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-500 rounded-full" 
-                  style={{ 
-                    width: `${(staff.length || masterData.teachers.length) > 0 ? (teachersPresent / (staff.length || masterData.teachers.length)) * 100 : 0}%` 
-                  }}
-                ></div>
-              </div>
-              <p className="text-[10px] mt-2 font-black text-blue-600 uppercase tracking-widest">
-                {(staff.length || masterData.teachers.length) > 0 ? Math.round((teachersPresent / (staff.length || masterData.teachers.length)) * 100) : 0}% Attendance Rate
-              </p>
-            </Card>
+                <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Teachers Present</p>
+                <div className="flex items-end gap-2">
+                  <h3 className="text-3xl font-black text-text-heading">
+                    {teachersPresent}
+                  </h3>
+                  <span className="text-sm font-bold text-text-sub mb-1">/ {staff.length || masterData.teachers.length}</span>
+                </div>
+                <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 rounded-full" 
+                    style={{ 
+                      width: `${(staff.length || masterData.teachers.length) > 0 ? (teachersPresent / (staff.length || masterData.teachers.length)) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+                <p className="text-[10px] mt-2 font-black text-blue-600 uppercase tracking-widest">
+                  {(staff.length || masterData.teachers.length) > 0 ? Math.round((teachersPresent / (staff.length || masterData.teachers.length)) * 100) : 0}% Attendance Rate
+                </p>
+              </Card>
+            )}
 
-            <Card className="p-6 bg-white border-slate-100 shadow-sm">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <Users size={24} />
+            {(isSuperAdmin || isAdmin) && (
+              <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <Users size={24} />
+                  </div>
+                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-widest">Total</span>
                 </div>
-                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-widest">Total</span>
-              </div>
-              <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Total Staff</p>
-              <h3 className="text-3xl font-black text-text-heading">{staff.length}</h3>
-              <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                <CheckCircle2 size={14} />
-                <span>Active Personnel</span>
-              </div>
-            </Card>
+                <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Total Staff</p>
+                <h3 className="text-3xl font-black text-text-heading">{staff.length}</h3>
+                <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                  <CheckCircle2 size={14} />
+                  <span>Active Personnel</span>
+                </div>
+              </Card>
+            )}
 
-            <Card className="p-6 bg-white border-slate-100 shadow-sm">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-orange-50 text-orange-600 rounded-xl">
-                  <BookOpen size={24} />
+            {(isSuperAdmin || isAdmin || currentUser?.role === 'accountant') && (
+              <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                    <Wallet size={24} />
+                  </div>
+                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-widest">Credit</span>
                 </div>
-                <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
-              </div>
-              <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Today's Visitors</p>
-              <h3 className="text-3xl font-black text-text-heading">{visitors.filter((v: any) => v.date === today || v.date === formatDate(today)).length}</h3>
-              <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-orange-600 uppercase tracking-widest">
-                <ArrowUpRight size={14} />
-                <span>Front Office Activity</span>
-              </div>
-            </Card>
+                <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Bank Balance</p>
+                <h3 className="text-3xl font-black text-text-heading">₹{bankBalance.toLocaleString()}</h3>
+                <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                  <Building2 size={14} />
+                  <span>Current Liquidity</span>
+                </div>
+              </Card>
+            )}
 
-            <Card className="p-6 bg-white border-slate-100 shadow-sm">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-green-50 text-green-600 rounded-xl">
-                  <Coins size={24} />
+            {(isSuperAdmin || isAdmin || currentUser?.role === 'accountant') && (
+              <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-green-50 text-green-600 rounded-xl">
+                    <Coins size={24} />
+                  </div>
                 </div>
-              </div>
-              <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Fees Collected</p>
-              <h3 className="text-3xl font-black text-text-heading">₹{feeTransactions.reduce((sum: number, t: any) => sum + t.totalPaid, 0).toLocaleString()}</h3>
-              <p className="text-[10px] mt-4 font-black text-green-600 uppercase tracking-widest">Total Revenue</p>
-            </Card>
+                <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Fees Collected</p>
+                <h3 className="text-3xl font-black text-text-heading">₹{feeTransactions.reduce((sum: number, t: any) => sum + Number(t.totalPaid || 0), 0).toLocaleString()}</h3>
+                <p className="text-[10px] mt-4 font-black text-green-600 uppercase tracking-widest">Total Revenue</p>
+              </Card>
+            )}
           </div>
 
           {/* Super Admin Quick Actions */}
@@ -1176,48 +1346,60 @@ const Dashboard = ({
                   Quick Access
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
-                  <button onClick={() => setView('income-expense')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
-                    <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
-                      <Plus size={24} className="text-primary group-hover:text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Add Expense</span>
-                  </button>
-                  <button onClick={() => setView('human-resource')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
-                    <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
-                      <CheckCircle2 size={24} className="text-primary group-hover:text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Leave Approval</span>
-                  </button>
-                  <button onClick={() => setView('hostel')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
-                    <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
-                      <UserCheck2 size={24} className="text-primary group-hover:text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Hostel Attend.</span>
-                  </button>
-                  <button onClick={() => setView('register-student')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
-                    <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
-                      <UserPlus size={24} className="text-primary group-hover:text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">New Admission</span>
-                  </button>
-                  <button onClick={() => setView('attendance')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
-                    <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
-                      <CalendarCheck size={24} className="text-primary group-hover:text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Attendance</span>
-                  </button>
+                  {(isSuperAdmin || isAdmin) && (
+                    <button onClick={() => setView('income-expense')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
+                      <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                        <Plus size={24} className="text-primary group-hover:text-white" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Add Expense</span>
+                    </button>
+                  )}
+                  {(isSuperAdmin || isAdmin) && (
+                    <button onClick={() => setView('human-resource')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
+                      <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                        <CheckCircle2 size={24} className="text-primary group-hover:text-white" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Leave Approval</span>
+                    </button>
+                  )}
+                  {(isSuperAdmin || isAdmin) && (
+                    <button onClick={() => setView('hostel')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
+                      <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                        <UserCheck2 size={24} className="text-primary group-hover:text-white" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Hostel Attend.</span>
+                    </button>
+                  )}
+                  {(isSuperAdmin || isAdmin) && (
+                    <button onClick={() => setView('register-student')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
+                      <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                        <UserPlus size={24} className="text-primary group-hover:text-white" />
+                      </div>
+                      <span className="text-[10px) font-black uppercase tracking-widest">New Admission</span>
+                    </button>
+                  )}
+                  {(isSuperAdmin || isAdmin) && (
+                    <button onClick={() => setView('attendance')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
+                      <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                        <CalendarCheck size={24} className="text-primary group-hover:text-white" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Attendance</span>
+                    </button>
+                  )}
                   <button onClick={() => setView('fee-management')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
                     <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
                       <Wallet size={24} className="text-primary group-hover:text-white" />
                     </div>
                     <span className="text-[10px] font-black uppercase tracking-widest">Collect Fee</span>
                   </button>
-                  <button onClick={() => setView('id-cards')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
-                    <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
-                      <Contact2 size={24} className="text-primary group-hover:text-white" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">ID Card</span>
-                  </button>
+                  {(isSuperAdmin || isAdmin) && (
+                    <button onClick={() => setView('id-cards')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group text-center">
+                      <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                        <Contact2 size={24} className="text-primary group-hover:text-white" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">ID Card</span>
+                    </button>
+                  )}
                 </div>
               </Card>
 
@@ -1337,31 +1519,79 @@ const Dashboard = ({
         </>
       )}
 
-      {/* Teacher View */}
+      {/* Teacher/Warden View */}
       {isTeacher && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
-              <Card className="p-6 bg-blue-600 text-white border-none shadow-xl shadow-blue-900/20">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="p-3 bg-white/20 rounded-xl">
-                    <Users size={24} />
-                  </div>
-                </div>
-                <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">My Students</p>
-                <h3 className="text-3xl font-black">{totalMyStudents}</h3>
-              </Card>
+              {isWarden ? (
+                <>
+                  <Card className="p-6 bg-blue-600 text-white border-none shadow-xl shadow-blue-900/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl">
+                        <Users size={24} />
+                      </div>
+                    </div>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Total Rooms</p>
+                    <h3 className="text-3xl font-black">{hostelRooms.length}</h3>
+                  </Card>
 
-              <Card className="p-6 bg-emerald-600 text-white border-none shadow-xl shadow-emerald-900/20">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="p-3 bg-white/20 rounded-xl">
-                    <UserCheck size={24} />
-                  </div>
-                </div>
-                <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Today's Presence</p>
-                <h3 className="text-3xl font-black">{todayAttendanceCount}</h3>
-              </Card>
+                  <Card className="p-6 bg-indigo-600 text-white border-none shadow-xl shadow-indigo-900/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl">
+                        <Bed size={24} />
+                      </div>
+                    </div>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Occupied Beds</p>
+                    <h3 className="text-3xl font-black">{hostelBeds.filter((b: any) => b.status === 'Occupied').length}</h3>
+                  </Card>
+
+                  <Card className="p-6 bg-emerald-600 text-white border-none shadow-xl shadow-emerald-900/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl">
+                        <CheckCircle2 size={24} />
+                      </div>
+                    </div>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Available Beds</p>
+                    <h3 className="text-3xl font-black">{hostelBeds.filter((b: any) => b.status === 'Available').length}</h3>
+                  </Card>
+
+                  <Card className="p-6 bg-orange-600 text-white border-none shadow-xl shadow-orange-900/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl">
+                        <ScanLine size={24} />
+                      </div>
+                    </div>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Hostel Attendance</p>
+                    <h3 className="text-3xl font-black">
+                      {hostelAttendance.filter((a: any) => a.attendance_date === new Date().toISOString().split('T')[0]).length}
+                    </h3>
+                  </Card>
+                </>
+              ) : (
+                <>
+                  <Card className="p-6 bg-blue-600 text-white border-none shadow-xl shadow-blue-900/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl">
+                        <Users size={24} />
+                      </div>
+                    </div>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">My Students</p>
+                    <h3 className="text-3xl font-black">{totalMyStudents}</h3>
+                  </Card>
+
+                  <Card className="p-6 bg-emerald-600 text-white border-none shadow-xl shadow-emerald-900/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl">
+                        <UserCheck size={24} />
+                      </div>
+                    </div>
+                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Today's Presence</p>
+                    <h3 className="text-3xl font-black">{todayAttendanceCount}</h3>
+                  </Card>
+                </>
+              )}
 
               <Card className="p-6 bg-purple-600 text-white border-none shadow-xl shadow-purple-900/20">
                 <div className="flex justify-between items-start mb-4">
@@ -1887,12 +2117,15 @@ const FileUpload = ({ label, icon: Icon = Upload, required = false, onChange, pr
   );
 };
 
-const Attendance = ({ students, attendance, setAttendance, masterData, currentUser, supabase, teacherAssignments, setSelectedStudentQR }: any) => {
+const Attendance = ({ students, attendance, setAttendance, masterData, currentUser, supabase, teacherAssignments, setSelectedStudentQR, staffAttendance }: any) => {
+  const isManagementRole = currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden' || currentUser?.role === 'accountant';
+  const isEmployee = currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden' || currentUser?.role === 'accountant';
+
   const [activeTab, setActiveTab] = useState<'scan' | 'manual' | 'history' | 'my-attendance'>(
     (currentUser?.role === 'student' || currentUser?.role === 'parent') ? 'my-attendance' : 'scan'
   );
 
-  const assignedClasses = (currentUser?.role === 'teacher' || currentUser?.role === 'staff') && teacherAssignments 
+  const assignedClasses = (currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden') && teacherAssignments 
     ? teacherAssignments.filter((a: any) => {
         const teacherName = currentUser?.name?.toLowerCase();
         const isClassTeacher = a.classTeacher?.toLowerCase() === teacherName;
@@ -1901,11 +2134,11 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
       })
     : [];
 
-  const classOptions = (currentUser?.role === 'teacher' || currentUser?.role === 'staff') && assignedClasses.length > 0
+  const classOptions = (currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden') && assignedClasses.length > 0
     ? [...new Set(assignedClasses.map(ac => ac.class))]
     : masterData.classes;
 
-  const sectionOptions = (currentUser?.role === 'teacher' || currentUser?.role === 'staff') && assignedClasses.length > 0
+  const sectionOptions = (currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden') && assignedClasses.length > 0
     ? [...new Set(assignedClasses.map(ac => ac.section))]
     : masterData.sections;
 
@@ -1930,9 +2163,9 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     section: ''
   });
 
-  // Pre-filter for teachers/staff
+  // Pre-filter for teachers/staff/wardens
   useEffect(() => {
-    if ((currentUser?.role === 'teacher' || currentUser?.role === 'staff') && teacherAssignments) {
+    if ((currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden') && teacherAssignments) {
       const teacherName = currentUser.name?.toLowerCase();
       const assignments = teacherAssignments.filter((a: any) => 
         a.classTeacher?.toLowerCase() === teacherName || (a.subjectTeachers || []).some((st: any) => st.teacher?.toLowerCase() === teacherName)
@@ -1951,7 +2184,7 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     let html5QrCode: Html5Qrcode | null = null;
 
     const startScanner = async () => {
-      if (scanning && activeTab === 'scan' && (currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff')) {
+      if (scanning && activeTab === 'scan' && isManagementRole) {
         try {
           await new Promise(resolve => setTimeout(resolve, 500));
           const element = document.getElementById("reader");
@@ -2330,7 +2563,9 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
            (!historyFilters.section || a.section === historyFilters.section);
   });
 
-  const myAttendance = attendance.filter((a: any) => a.studentId === currentUser?.studentId);
+  const myAttendance = isEmployee
+    ? (staffAttendance || []).filter((a: any) => a.staffId === currentUser?.username || a.staffId === currentUser?.id)
+    : attendance.filter((a: any) => a.studentId === currentUser?.studentId);
 
   return (
     <div className="space-y-8">
@@ -2342,11 +2577,12 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
       </div>
 
       <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl w-fit">
-        {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') ? (
+        {isManagementRole ? (
           [
             { id: 'scan', label: 'QR Scan', icon: QrCode },
             { id: 'manual', label: 'Manual Entry', icon: UserCheck },
-            { id: 'history', label: 'History', icon: Clock }
+            { id: 'history', label: 'History', icon: Clock },
+            { id: 'my-attendance', label: 'My Attendance', icon: UserCircle }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2372,7 +2608,7 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
       </div>
 
       <AnimatePresence mode="wait">
-        {activeTab === 'scan' && (currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+        {activeTab === 'scan' && isManagementRole && (
           <motion.div key="scan" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 space-y-6">
@@ -2563,7 +2799,7 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
           </motion.div>
         )}
 
-        {activeTab === 'manual' && (currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+        {activeTab === 'manual' && isManagementRole && (
           <motion.div key="manual" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <Card className="lg:col-span-1 h-fit">
@@ -2748,38 +2984,47 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
                   <thead>
                     <tr className="border-b border-slate-200">
                       <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
-                      {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>}
-                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
+                      {isManagementRole && activeTab !== 'my-attendance' && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>}
+                      {activeTab === 'my-attendance' && isEmployee && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Employee</th>}
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">{activeTab === 'my-attendance' ? 'Role' : 'Class'}</th>
                       <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
                       <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Time</th>
-                      {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+                      {isManagementRole && activeTab !== 'my-attendance' && (
                         <>
                           <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">IP Address</th>
                           <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Location</th>
                         </>
                       )}
-                      {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>}
+                      {isManagementRole && activeTab !== 'my-attendance' && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {((currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') ? filteredHistory : myAttendance).length === 0 ? (
+                    {(isManagementRole && activeTab !== 'my-attendance' ? filteredHistory : myAttendance).length === 0 ? (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-text-sub italic">No attendance records found.</td>
                       </tr>
                     ) : (
-                      ((currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') ? filteredHistory : myAttendance).map((a: any) => (
+                      (isManagementRole && activeTab !== 'my-attendance' ? filteredHistory : myAttendance).map((a: any) => (
                         <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-4 text-sm font-medium text-text-sub">
                             {formatDate(a.date)}
                             <span className="ml-2 text-[10px] font-bold text-primary/60 uppercase">({a.period || 'Morning'})</span>
                           </td>
-                          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+                          {isManagementRole && activeTab !== 'my-attendance' && (
                             <td className="py-4">
                               <p className="text-sm font-bold text-text-heading">{a.studentName}</p>
                               <p className="text-[10px] text-text-sub uppercase">{a.studentId}</p>
                             </td>
                           )}
-                          <td className="py-4 text-sm font-medium text-text-sub">{a.class} - {a.section}</td>
+                          {activeTab === 'my-attendance' && isEmployee && (
+                            <td className="py-4">
+                              <p className="text-sm font-bold text-text-heading">{a.staffName}</p>
+                              <p className="text-[10px] text-text-sub uppercase">{a.staffId} ({a.role})</p>
+                            </td>
+                          )}
+                          <td className="py-4 text-sm font-medium text-text-sub">
+                            {activeTab === 'my-attendance' ? (a.role || 'Staff') : `${a.class} - ${a.section}`}
+                          </td>
                           <td className="py-4">
                             <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
                               a.status === 'Present' ? 'bg-green-100 text-green-700' : 
@@ -2790,14 +3035,14 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
                               {a.status}
                             </span>
                           </td>
-                          <td className="py-4 text-sm font-medium text-text-sub">{a.time || a.attendanceTime || 'N/A'}</td>
-                          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+                          <td className="py-4 text-sm font-medium text-text-sub">{a.time || a.inTime || 'N/A'}</td>
+                          {isManagementRole && activeTab !== 'my-attendance' && (
                             <>
                               <td className="py-4 text-xs font-mono text-text-sub">{a.ipAddress || 'N/A'}</td>
                               <td className="py-4 text-xs font-mono text-text-sub">{a.location || 'N/A'}</td>
                             </>
                           )}
-                          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+                          {isManagementRole && activeTab !== 'my-attendance' && (
                             <td className="py-4 text-right">
                               <div className="flex justify-end gap-2">
                                 <button 
@@ -4682,8 +4927,10 @@ const FeeManagement = ({
   showModal,
   leaveRequests,
   getStudentDueFees,
-  hostelBeds
+  hostelBeds,
+  currentUser
 }: any) => {
+  const isAccountant = currentUser?.role === 'accountant';
   const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports' | 'ledger' | 'bank-cash' | 'adjustment-logs'>('collect');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedLedgerStudent, setSelectedLedgerStudent] = useState<Student | null>(null);
@@ -5012,7 +5259,7 @@ const FeeManagement = ({
           payment_mode: paymentDetails.mode,
           transaction_id: paymentDetails.transactionId,
           invoice_number: invoiceNumber,
-          collected_by: 'Admin',
+          collected_by: currentUser?.name || 'Staff',
           month: selectedMonth,
           academic_session: selectedStudent.session || schoolProfile.currentSession || '2024-25',
           date: new Date().toISOString().split('T')[0],
@@ -5482,205 +5729,207 @@ const FeeManagement = ({
 
       {activeTab === 'master' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-1">
-              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                <TagIcon size={20} />
-                Fee Types
-              </h3>
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Input placeholder="New Fee Type" id="newFeeType" />
-                  <button 
-                    onClick={async () => {
-                      const input = document.getElementById('newFeeType') as HTMLInputElement;
-                      if (input.value && supabase) {
-                        try {
-                          const { data: inserted, error } = await supabase
-                            .from('fee_types')
-                            .insert([{ name: input.value, description: '' }])
-                            .select();
-                          
-                          if (error) throw error;
-                          if (inserted) {
-                            setFeeTypes([...feeTypes, inserted[0]]);
-                            input.value = '';
-                          }
-                        } catch (err) {
-                          console.error('Error adding fee type:', err);
-                        }
-                      }
-                    }}
-                    className="btn-primary px-4"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  {feeTypes.map(f => (
-                    <div key={f.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <span className="font-medium">{f.name}</span>
-                      <div className="flex gap-1">
-                        <button 
-                          onClick={async () => {
-                            const newName = prompt('Edit Fee Type Name:', f.name);
-                            if (newName && newName !== f.name && supabase) {
-                              try {
-                                const { error } = await supabase
-                                  .from('fee_types')
-                                  .update({ name: newName })
-                                  .eq('id', f.id);
-                                
-                                if (error) throw error;
-                                setFeeTypes(feeTypes.map(t => t.id === f.id ? { ...t, name: newName } : t));
-                              } catch (err) {
-                                console.error('Error editing fee type:', err);
-                              }
+          {!isAccountant && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Card className="lg:col-span-1">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <TagIcon size={20} />
+                  Fee Types
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input placeholder="New Fee Type" id="newFeeType" />
+                    <button 
+                      onClick={async () => {
+                        const input = document.getElementById('newFeeType') as HTMLInputElement;
+                        if (input.value && supabase) {
+                          try {
+                            const { data: inserted, error } = await supabase
+                              .from('fee_types')
+                              .insert([{ name: input.value, description: '' }])
+                              .select();
+                            
+                            if (error) throw error;
+                            if (inserted) {
+                              setFeeTypes([...feeTypes, inserted[0]]);
+                              input.value = '';
                             }
-                          }}
-                          className="text-blue-500 hover:bg-blue-50 p-1 rounded-lg"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => {
-                            showModal(
-                              'Confirm Delete',
-                              'Are you sure you want to delete this fee type?',
-                              async () => {
+                          } catch (err) {
+                            console.error('Error adding fee type:', err);
+                          }
+                        }
+                      }}
+                      className="btn-primary px-4"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {feeTypes.map(f => (
+                      <div key={f.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="font-medium">{f.name}</span>
+                        <div className="flex gap-1">
+                          <button 
+                            onClick={async () => {
+                              const newName = prompt('Edit Fee Type Name:', f.name);
+                              if (newName && newName !== f.name && supabase) {
                                 try {
-                                  if (!supabase) return;
                                   const { error } = await supabase
                                     .from('fee_types')
-                                    .delete()
+                                    .update({ name: newName })
                                     .eq('id', f.id);
                                   
                                   if (error) throw error;
-                                  setFeeTypes(prev => prev.filter(t => t.id !== f.id));
-                                  alert('Fee type deleted successfully');
+                                  setFeeTypes(feeTypes.map(t => t.id === f.id ? { ...t, name: newName } : t));
                                 } catch (err) {
-                                  console.error('Error deleting fee type:', err);
-                                  alert('Error deleting fee type: ' + (err as any).message);
+                                  console.error('Error editing fee type:', err);
                                 }
                               }
-                            );
-                          }} 
-                          className="text-red-500 hover:bg-red-50 p-1 rounded-lg"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                            }}
+                            className="text-blue-500 hover:bg-blue-50 p-1 rounded-lg"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              showModal(
+                                'Confirm Delete',
+                                'Are you sure you want to delete this fee type?',
+                                async () => {
+                                  try {
+                                    if (!supabase) return;
+                                    const { error } = await supabase
+                                      .from('fee_types')
+                                      .delete()
+                                      .eq('id', f.id);
+                                    
+                                    if (error) throw error;
+                                    setFeeTypes(prev => prev.filter(t => t.id !== f.id));
+                                    alert('Fee type deleted successfully');
+                                  } catch (err) {
+                                    console.error('Error deleting fee type:', err);
+                                    alert('Error deleting fee type: ' + (err as any).message);
+                                  }
+                                }
+                              );
+                            }} 
+                            className="text-red-500 hover:bg-red-50 p-1 rounded-lg"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-
-            <Card className="lg:col-span-2">
-              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                <ArrowRightLeft size={20} />
-                Fee Master (Setup)
-              </h3>
-              <div className="space-y-6">
-                <div className="max-w-xs">
-                  <Select 
-                    label="Select Class" 
-                    options={masterData.classes} 
-                    value={masterClass}
-                    onChange={(e: any) => setMasterClass(e.target.value)}
-                  />
-                </div>
-
-                {masterClass && (
-                  <div className="space-y-4">
-                    <p className="text-sm font-bold text-text-secondary uppercase tracking-wider">Assign Fees for {masterClass}</p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="border-b border-slate-200">
-                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Select</th>
-                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Fee Type</th>
-                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Amount</th>
-                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Frequency</th>
-                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Student Type</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {feeTypes.map(ft => (
-                            <tr key={ft.id}>
-                              <td className="py-3">
-                                <input 
-                                  type="checkbox" 
-                                  checked={(masterSelections as any)[ft.name]?.selected || false}
-                                  onChange={(e) => setMasterSelections({
-                                    ...masterSelections,
-                                    [ft.name]: { ...(masterSelections as any)[ft.name], selected: e.target.checked }
-                                  })}
-                                  className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
-                                />
-                              </td>
-                              <td className="py-3 font-medium text-sm">{ft.name}</td>
-                              <td className="py-3">
-                                <input 
-                                  type="number"
-                                  placeholder="Amount"
-                                  value={(masterSelections as any)[ft.name]?.amount || ''}
-                                  onChange={(e) => setMasterSelections({
-                                    ...masterSelections,
-                                    [ft.name]: { ...(masterSelections as any)[ft.name], amount: parseFloat(e.target.value) || 0 }
-                                  })}
-                                  className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                />
-                              </td>
-                              <td className="py-3">
-                                <select 
-                                  value={(masterSelections as any)[ft.name]?.frequency || 'Monthly'}
-                                  onChange={(e) => setMasterSelections({
-                                    ...masterSelections,
-                                    [ft.name]: { ...(masterSelections as any)[ft.name], frequency: e.target.value }
-                                  })}
-                                  className="px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                >
-                                  {['Monthly', 'Quarterly', 'Half-Yearly', 'Yearly'].map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="py-3">
-                                <select 
-                                  value={(masterSelections as any)[ft.name]?.studentType || 'Both'}
-                                  onChange={(e) => setMasterSelections({
-                                    ...masterSelections,
-                                    [ft.name]: { ...(masterSelections as any)[ft.name], studentType: e.target.value }
-                                  })}
-                                  className="px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                >
-                                  {['Both', 'New', 'Old'].map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                  ))}
-                                </select>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <button 
-                      onClick={handleAssignFees}
-                      className="btn-primary px-8 py-3"
-                    >
-                      Assign Selected Fees
-                    </button>
+                    ))}
                   </div>
-                )}
-              </div>
-            </Card>
-          </div>
+                </div>
+              </Card>
+
+              <Card className="lg:col-span-2">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <ArrowRightLeft size={20} />
+                  Fee Master (Setup)
+                </h3>
+                <div className="space-y-6">
+                  <div className="max-w-xs">
+                    <Select 
+                      label="Select Class" 
+                      options={masterData.classes} 
+                      value={masterClass}
+                      onChange={(e: any) => setMasterClass(e.target.value)}
+                    />
+                  </div>
+
+                  {masterClass && (
+                    <div className="space-y-4">
+                      <p className="text-sm font-bold text-text-secondary uppercase tracking-wider">Assign Fees for {masterClass}</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="pb-2 font-bold text-xs uppercase text-text-sub">Select</th>
+                              <th className="pb-2 font-bold text-xs uppercase text-text-sub">Fee Type</th>
+                              <th className="pb-2 font-bold text-xs uppercase text-text-sub">Amount</th>
+                              <th className="pb-2 font-bold text-xs uppercase text-text-sub">Frequency</th>
+                              <th className="pb-2 font-bold text-xs uppercase text-text-sub">Student Type</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {feeTypes.map(ft => (
+                              <tr key={ft.id}>
+                                <td className="py-3">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={(masterSelections as any)[ft.name]?.selected || false}
+                                    onChange={(e) => setMasterSelections({
+                                      ...masterSelections,
+                                      [ft.name]: { ...(masterSelections as any)[ft.name], selected: e.target.checked }
+                                    })}
+                                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                  />
+                                </td>
+                                <td className="py-3 font-medium text-sm">{ft.name}</td>
+                                <td className="py-3">
+                                  <input 
+                                    type="number"
+                                    placeholder="Amount"
+                                    value={(masterSelections as any)[ft.name]?.amount || ''}
+                                    onChange={(e) => setMasterSelections({
+                                      ...masterSelections,
+                                      [ft.name]: { ...(masterSelections as any)[ft.name], amount: parseFloat(e.target.value) || 0 }
+                                    })}
+                                    className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                </td>
+                                <td className="py-3">
+                                  <select 
+                                    value={(masterSelections as any)[ft.name]?.frequency || 'Monthly'}
+                                    onChange={(e) => setMasterSelections({
+                                      ...masterSelections,
+                                      [ft.name]: { ...(masterSelections as any)[ft.name], frequency: e.target.value }
+                                    })}
+                                    className="px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                  >
+                                    {['Monthly', 'Quarterly', 'Half-Yearly', 'Yearly'].map(opt => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="py-3">
+                                  <select 
+                                    value={(masterSelections as any)[ft.name]?.studentType || 'Both'}
+                                    onChange={(e) => setMasterSelections({
+                                      ...masterSelections,
+                                      [ft.name]: { ...(masterSelections as any)[ft.name], studentType: e.target.value }
+                                    })}
+                                    className="px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                  >
+                                    {['Both', 'New', 'Old'].map(opt => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button 
+                        onClick={handleAssignFees}
+                        className="btn-primary px-8 py-3"
+                      >
+                        Assign Selected Fees
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+          )}
 
           <Card>
             <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
               <ClipboardList size={20} />
-              Assigned Fees List
+              Assigned Fees List {isAccountant && "(View Only)"}
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -5691,7 +5940,7 @@ const FeeManagement = ({
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Amount</th>
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Frequency</th>
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
-                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
+                    {!isAccountant && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -5715,38 +5964,40 @@ const FeeManagement = ({
                             {m.studentType || 'Both'}
                           </span>
                         </td>
-                        <td className="py-4 text-right space-x-2">
-                          <button 
-                            onClick={() => setEditingFee(m)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button 
-                            onClick={() => {
-                              showModal(
-                                'Confirm Delete',
-                                'Are you sure you want to delete this fee assignment?',
-                                async () => {
-                                  try {
-                                    if (supabase) {
-                                      const { error } = await supabase.from('fee_master').delete().eq('id', m.id);
-                                      if (error) throw error;
+                        {!isAccountant && (
+                          <td className="py-4 text-right space-x-2">
+                            <button 
+                              onClick={() => setEditingFee(m)}
+                              className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                showModal(
+                                  'Confirm Delete',
+                                  'Are you sure you want to delete this fee assignment?',
+                                  async () => {
+                                    try {
+                                      if (supabase) {
+                                        const { error } = await supabase.from('fee_master').delete().eq('id', m.id);
+                                        if (error) throw error;
+                                      }
+                                      setFeeMaster(prev => prev.filter(f => f.id !== m.id));
+                                      alert('Fee assignment deleted successfully');
+                                    } catch (err) {
+                                      console.error('Error deleting fee assignment:', err);
+                                      alert('Error deleting fee assignment: ' + (err as any).message);
                                     }
-                                    setFeeMaster(prev => prev.filter(f => f.id !== m.id));
-                                    alert('Fee assignment deleted successfully');
-                                  } catch (err) {
-                                    console.error('Error deleting fee assignment:', err);
-                                    alert('Error deleting fee assignment: ' + (err as any).message);
                                   }
-                                }
-                              );
-                            }}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
+                                );
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
@@ -6083,54 +6334,56 @@ const FeeManagement = ({
       {activeTab === 'bank-cash' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                <ArrowRightLeft size={20} />
-                Contra Entry (Bank & Cash)
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="label-text">Transaction Type</label>
-                  <select 
-                    className="input-field"
-                    value={contraForm.type}
-                    onChange={(e: any) => setContraForm({...contraForm, type: e.target.value})}
-                  >
-                    <option value="Bank to Cash">Bank to Cash</option>
-                    <option value="Cash to Bank">Cash to Bank</option>
-                    <option value="Bank Adjustment">Bank Balance Adjustment</option>
-                    <option value="Cash Adjustment">Cash Balance Adjustment</option>
-                  </select>
-                </div>
-                <Input 
-                  label="Amount" 
-                  type="number" 
-                  value={contraForm.amount}
-                  onChange={(e: any) => setContraForm({...contraForm, amount: parseFloat(e.target.value) || 0})}
-                />
-                <Input 
-                  label="Reference / Note" 
-                  placeholder="e.g. Withdrawal for petty cash" 
-                  value={contraForm.reference}
-                  onChange={(e: any) => setContraForm({...contraForm, reference: e.target.value})}
-                />
-                <Input 
-                  label="Date" 
-                  type="date" 
-                  value={contraForm.date}
-                  onChange={(e: any) => setContraForm({...contraForm, date: e.target.value})}
-                />
-              </div>
-              <div className="mt-8 flex justify-end">
-                <button 
-                  onClick={handleContraEntry}
-                  className="btn-primary px-8 py-3 flex items-center gap-2"
-                >
+            {!isAccountant && (
+              <Card>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
                   <ArrowRightLeft size={20} />
-                  Process Entry
-                </button>
-              </div>
-            </Card>
+                  Contra Entry (Bank & Cash)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="label-text">Transaction Type</label>
+                    <select 
+                      className="input-field"
+                      value={contraForm.type}
+                      onChange={(e: any) => setContraForm({...contraForm, type: e.target.value})}
+                    >
+                      <option value="Bank to Cash">Bank to Cash</option>
+                      <option value="Cash to Bank">Cash to Bank</option>
+                      <option value="Bank Adjustment">Bank Balance Adjustment</option>
+                      <option value="Cash Adjustment">Cash Balance Adjustment</option>
+                    </select>
+                  </div>
+                  <Input 
+                    label="Amount" 
+                    type="number" 
+                    value={contraForm.amount}
+                    onChange={(e: any) => setContraForm({...contraForm, amount: parseFloat(e.target.value) || 0})}
+                  />
+                  <Input 
+                    label="Reference / Note" 
+                    placeholder="e.g. Withdrawal for petty cash" 
+                    value={contraForm.reference}
+                    onChange={(e: any) => setContraForm({...contraForm, reference: e.target.value})}
+                  />
+                  <Input 
+                    label="Date" 
+                    type="date" 
+                    value={contraForm.date}
+                    onChange={(e: any) => setContraForm({...contraForm, date: e.target.value})}
+                  />
+                </div>
+                <div className="mt-8 flex justify-end">
+                  <button 
+                    onClick={handleContraEntry}
+                    className="btn-primary px-8 py-3 flex items-center gap-2"
+                  >
+                    <ArrowRightLeft size={20} />
+                    Process Entry
+                  </button>
+                </div>
+              </Card>
+            )}
 
             <Card>
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
@@ -6199,32 +6452,36 @@ const FeeManagement = ({
                   <p className="text-[10px] font-bold text-text-sub uppercase mb-1">Bank Balance</p>
                   <div className="flex items-center justify-between">
                     <p className="text-2xl font-black text-primary">₹{bankBalance.toLocaleString()}</p>
-                    <button 
-                      onClick={() => {
-                        const amt = prompt('Enter adjustment amount (use negative for deduction):');
-                        const reason = prompt('Enter reason for adjustment:');
-                        if (amt && reason) handleBalanceAdjustment('Bank', parseFloat(amt), reason);
-                      }}
-                      className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                    >
-                      <Edit2 size={16} />
-                    </button>
+                    {!isAccountant && (
+                      <button 
+                        onClick={() => {
+                          const amt = prompt('Enter adjustment amount (use negative for deduction):');
+                          const reason = prompt('Enter reason for adjustment:');
+                          if (amt && reason) handleBalanceAdjustment('Bank', parseFloat(amt), reason);
+                        }}
+                        className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="p-4 bg-white rounded-2xl border border-primary/10 shadow-sm">
                   <p className="text-[10px] font-bold text-text-sub uppercase mb-1">Cash in Hand</p>
                   <div className="flex items-center justify-between">
                     <p className="text-2xl font-black text-green-600">₹{cashBalance.toLocaleString()}</p>
-                    <button 
-                      onClick={() => {
-                        const amt = prompt('Enter adjustment amount (use negative for deduction):');
-                        const reason = prompt('Enter reason for adjustment:');
-                        if (amt && reason) handleBalanceAdjustment('Cash', parseFloat(amt), reason);
-                      }}
-                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    >
-                      <Edit2 size={16} />
-                    </button>
+                    {!isAccountant && (
+                      <button 
+                        onClick={() => {
+                          const amt = prompt('Enter adjustment amount (use negative for deduction):');
+                          const reason = prompt('Enter reason for adjustment:');
+                          if (amt && reason) handleBalanceAdjustment('Cash', parseFloat(amt), reason);
+                        }}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -6414,51 +6671,55 @@ const FeeManagement = ({
                               >
                                 <MessageCircle size={16} />
                               </button>
-                              <button 
-                                onClick={async () => {
-                                  const newAmount = prompt('Edit Transaction Amount:', t.totalPaid.toString());
-                                  if (newAmount && !isNaN(parseFloat(newAmount)) && supabase) {
-                                    try {
-                                      const { error } = await supabase
-                                        .from('fee_collections')
-                                        .update({ total_paid: parseFloat(newAmount) })
-                                        .eq('id', t.id);
-                                      if (error) throw error;
-                                      setFeeTransactions(feeTransactions.map(tr => tr.id === t.id ? { ...tr, totalPaid: parseFloat(newAmount) } : tr));
-                                      alert('Transaction updated successfully!');
-                                    } catch (err) {
-                                      console.error('Error updating transaction:', err);
-                                      alert('Error updating transaction');
-                                    }
-                                  }
-                                }}
-                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                                title="Edit Transaction"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                              <button 
-                                onClick={async () => {
-                                  if (confirm('Are you sure you want to delete this transaction?') && supabase) {
-                                    try {
-                                      const { error } = await supabase
-                                        .from('fee_collections')
-                                        .delete()
-                                        .eq('id', t.id);
-                                      if (error) throw error;
-                                      setFeeTransactions(prev => prev.filter(tr => tr.id !== t.id));
-                                      alert('Transaction deleted successfully!');
-                                    } catch (err) {
-                                      console.error('Error deleting transaction:', err);
-                                      alert('Error deleting transaction');
-                                    }
-                                  }
-                                }}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                title="Delete Transaction"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {!isAccountant && (
+                                <>
+                                  <button 
+                                    onClick={async () => {
+                                      const newAmount = prompt('Edit Transaction Amount:', t.totalPaid.toString());
+                                      if (newAmount && !isNaN(parseFloat(newAmount)) && supabase) {
+                                        try {
+                                          const { error } = await supabase
+                                            .from('fee_collections')
+                                            .update({ total_paid: parseFloat(newAmount) })
+                                            .eq('id', t.id);
+                                          if (error) throw error;
+                                          setFeeTransactions(feeTransactions.map(tr => tr.id === t.id ? { ...tr, totalPaid: parseFloat(newAmount) } : tr));
+                                          alert('Transaction updated successfully!');
+                                        } catch (err) {
+                                          console.error('Error updating transaction:', err);
+                                          alert('Error updating transaction');
+                                        }
+                                      }
+                                    }}
+                                    className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                    title="Edit Transaction"
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button 
+                                    onClick={async () => {
+                                      if (confirm('Are you sure you want to delete this transaction?') && supabase) {
+                                        try {
+                                          const { error } = await supabase
+                                            .from('fee_collections')
+                                            .delete()
+                                            .eq('id', t.id);
+                                          if (error) throw error;
+                                          setFeeTransactions(prev => prev.filter(tr => tr.id !== t.id));
+                                          alert('Transaction deleted successfully!');
+                                        } catch (err) {
+                                          console.error('Error deleting transaction:', err);
+                                          alert('Error deleting transaction');
+                                        }
+                                      }
+                                    }}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Delete Transaction"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -7144,6 +7405,7 @@ const TeacherPanel = ({
             supabase={supabase}
             teacherAssignments={teacherAssignments}
             setSelectedStudentQR={setSelectedStudentQR}
+            staffAttendance={staffAttendance}
           />
         </div>
       )}
@@ -7852,7 +8114,7 @@ const TeacherPanel = ({
   );
 };
 
-const StudentPanel = ({ students, examResults, examSchedules, reportCards, reportCardTemplates, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser }: any) => {
+const StudentPanel = ({ students, examResults, examSchedules, reportCards, reportCardTemplates, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser, schoolProfile }: any) => {
   const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'fees' | 'exams'>('progress');
   const [showHomeworkUploadModal, setShowHomeworkUploadModal] = useState(false);
   const [selectedHomeworkForUpload, setSelectedHomeworkForUpload] = useState<any>(null);
@@ -8069,6 +8331,7 @@ const StudentPanel = ({ students, examResults, examSchedules, reportCards, repor
                       student={myStudent} 
                       template={reportCardTemplates.find(t => t.id === rc.templateId) || reportCardTemplates[0]} 
                       reportCard={rc} 
+                      schoolProfile={schoolProfile}
                     />
                   </div>
                 </div>
@@ -9098,8 +9361,9 @@ const Class360View = ({ students, masterData, attendance, feeTransactions, getSt
 };
 
 const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, currentUser, supabase }: any) => {
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
   const [activeTab, setActiveTab] = useState<'scan' | 'history' | 'qr-code'>(
-    currentUser?.role === 'admin' ? 'qr-code' : 'scan'
+    isAdmin ? 'qr-code' : 'scan'
   );
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -9247,7 +9511,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
     setScanning(false);
   };
 
-  const myAttendance = staffAttendance.filter((a: any) => a.staffId === currentUser?.id);
+  const myAttendance = staffAttendance.filter((a: any) => a.staffId === currentUser?.id || a.staffId === currentUser?.username);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
@@ -9259,7 +9523,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
       </div>
 
       <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
-        {currentUser?.role === 'admin' && (
+        {isAdmin && (
           <button
             onClick={() => setActiveTab('qr-code')}
             className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'qr-code' ? 'bg-white text-primary shadow-sm' : 'text-text-sub hover:text-text-heading'}`}
@@ -9277,11 +9541,11 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
           onClick={() => setActiveTab('history')}
           className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'history' ? 'bg-white text-primary shadow-sm' : 'text-text-sub hover:text-text-heading'}`}
         >
-          {currentUser?.role === 'admin' ? 'All History' : 'My History'}
+          {isAdmin ? 'All History' : 'My History'}
         </button>
       </div>
 
-      {activeTab === 'qr-code' && currentUser?.role === 'admin' && (
+      {activeTab === 'qr-code' && isAdmin && (
         <Card className="p-12 flex flex-col items-center justify-center text-center space-y-8 max-w-2xl mx-auto">
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-text-heading tracking-tight uppercase">Official School Attendance QR</h2>
@@ -9401,7 +9665,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
                   <th className="pb-4 px-4">Time</th>
                   <th className="pb-4 px-4">Method</th>
                   <th className="pb-4 px-4">Status</th>
-                  {currentUser?.role === 'admin' && (
+                  {isAdmin && (
                     <>
                       <th className="pb-4 px-4">IP Address</th>
                       <th className="pb-4 px-4">Location</th>
@@ -9410,7 +9674,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {(currentUser?.role === 'admin' ? staffAttendance : myAttendance).map((a: any) => (
+                {(isAdmin ? staffAttendance : myAttendance).map((a: any) => (
                   <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50 transition-all">
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-3">
@@ -9421,7 +9685,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
                       </div>
                     </td>
                     <td className="py-4 px-4 font-medium text-text-sub uppercase text-[10px] tracking-widest">{a.role}</td>
-                    <td className="py-4 px-4 font-medium">{a.date}</td>
+                    <td className="py-4 px-4 font-medium">{formatDate(a.date)}</td>
                     <td className="py-4 px-4 font-medium">{a.inTime || a.time}</td>
                     <td className="py-4 px-4">
                       <span className="px-2 py-1 bg-slate-100 text-text-sub rounded text-[10px] font-bold uppercase tracking-widest">
@@ -9433,7 +9697,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
                         {a.status}
                       </span>
                     </td>
-                    {currentUser?.role === 'admin' && (
+                    {isAdmin && (
                       <>
                         <td className="py-4 px-4 font-mono text-[10px] text-text-sub">{a.ipAddress || 'N/A'}</td>
                         <td className="py-4 px-4 font-mono text-[10px] text-text-sub">{a.location || 'N/A'}</td>
@@ -9441,7 +9705,7 @@ const StaffAttendanceModule = ({ staff, staffAttendance, setStaffAttendance, cur
                     )}
                   </tr>
                 ))}
-                {(currentUser?.role === 'admin' ? staffAttendance : myAttendance).length === 0 && (
+                {(isAdmin ? staffAttendance : myAttendance).length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-text-sub font-medium italic">
                       No attendance records found.
@@ -11220,6 +11484,15 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
                         <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Joining Date</p>
                         <p className="text-sm font-bold text-text-heading flex items-center gap-2"><CalendarCheck size={14} className="text-primary" /> {viewStaff.joiningDate}</p>
                       </div>
+                      {currentUser?.role === 'super-admin' && (
+                        <div className="pt-4 border-t border-slate-100">
+                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Password (Super Admin Only)</p>
+                          <p className="text-sm font-mono font-bold text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 flex items-center gap-2">
+                            <Lock size={12} />
+                            {users.find((u: any) => u.username === viewStaff.staffId || u.id === viewStaff.staffId || u.dbUsername === viewStaff.staffId)?.password || '123'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -12534,7 +12807,6 @@ const RoleAssignPanel = ({ users, setUsers, currentUser }: any) => {
     'Home Work Assign',
     'Bank/Cash Management',
     'ID Card Generate Panel',
-    'Role Assign',
     'User Logs'
   ];
 
@@ -13041,7 +13313,7 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
 const downloadAPK = (type: 'student' | 'staff') => {
   // We cannot generate a valid binary APK file directly from browser memory.
   // Instead, we provide the user with the REAL live link to the software.
-  const appUrl = 'https://ais-pre-b7iws4jnem6zktndrktqcp-212916940376.asia-southeast1.run.app';
+  const appUrl = 'https://ais-pre-m2mtvrowsxacw5pnvzuipc-44801460094.asia-southeast1.run.app';
   
   const modalHtml = `
     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: sans-serif; padding: 20px;">
@@ -13084,7 +13356,7 @@ const downloadAPK = (type: 'student' | 'staff') => {
   });
 };
 
-const SuperAdminPanel = ({ users, setUsers }: any) => {
+const SuperAdminPanel = ({ users, setUsers, schoolProfile, setSchoolProfile }: any) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -13096,19 +13368,46 @@ const SuperAdminPanel = ({ users, setUsers }: any) => {
     }
 
     if (supabase) {
+      // Try to find the user in users table by username OR id
+      const { data: userToUpdate } = await supabase.from('users').select('id, username').or(`username.eq.${userId},id.eq.${userId}`).single();
+      
       const { error } = await supabase
         .from('users')
         .update({ password: newPassword })
-        .eq('username', userId);
+        .eq('id', userToUpdate?.id || userId);
       
       if (error) {
         console.error('Error resetting password in Supabase:', error);
-        alert('Failed to reset password in database');
-        return;
+        // Fallback to username matching if ID match failed
+        const { error: error2 } = await supabase.from('users').update({ password: newPassword }).eq('username', userId);
+        if (error2) {
+          alert('Failed to reset password in database');
+          return;
+        }
+      }
+
+      // Sync with school_profile for special accounts
+      if (userId === schoolProfile.wardenPanelId || userId === 'warden') {
+        const { data: profile } = await supabase.from('school_profile').select('id').single();
+        if (profile?.id) {
+          await supabase.from('school_profile').update({ warden_password: newPassword }).eq('id', profile.id);
+        }
+      } else if (userId === schoolProfile.accountantPanelId || userId === 'accountant') {
+        const { data: profile } = await supabase.from('school_profile').select('id').single();
+        if (profile?.id) {
+          await supabase.from('school_profile').update({ accountant_password: newPassword }).eq('id', profile.id);
+        }
       }
     }
 
-    setUsers(users.map((u: any) => u.id === userId ? { ...u, password: newPassword } : u));
+    // Update local state
+    if (userId === schoolProfile.wardenPanelId) {
+      setSchoolProfile(prev => ({ ...prev, wardenPanelPassword: newPassword }));
+    } else if (userId === schoolProfile.accountantPanelId) {
+      setSchoolProfile(prev => ({ ...prev, accountantPanelPassword: newPassword }));
+    }
+
+    setUsers(users.map((u: any) => u.id === userId || u.username === userId ? { ...u, password: newPassword } : u));
     setEditingUserId(null);
     setNewPassword('');
     alert('Password reset successfully!');
@@ -13400,6 +13699,67 @@ export default function App() {
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS department TEXT;
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS designation TEXT;
         `;
+
+        const hostelMigrations = `
+          -- Hostel Rooms Table
+          CREATE TABLE IF NOT EXISTS hostel_rooms (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            room_number TEXT UNIQUE,
+            floor TEXT,
+            capacity INTEGER DEFAULT 4,
+            room_type TEXT DEFAULT 'Non-AC',
+            gender TEXT DEFAULT 'Male',
+            category TEXT DEFAULT 'Standard',
+            price_per_month NUMERIC DEFAULT 0,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Hostel Beds Table
+          CREATE TABLE IF NOT EXISTS hostel_beds (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            room_id UUID REFERENCES hostel_rooms(id) ON DELETE CASCADE,
+            bed_number TEXT,
+            status TEXT DEFAULT 'Available',
+            student_id TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Hostel Staff Table
+          CREATE TABLE IF NOT EXISTS hostel_staff (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            name TEXT,
+            role TEXT DEFAULT 'Warden',
+            mobile TEXT,
+            email TEXT,
+            shift TEXT DEFAULT 'Day',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Hostel Attendance Table
+          CREATE TABLE IF NOT EXISTS hostel_attendance (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            student_id TEXT,
+            student_name TEXT,
+            room_number TEXT,
+            attendance_date DATE DEFAULT CURRENT_DATE,
+            status TEXT,
+            ip_address TEXT,
+            location TEXT,
+            marked_by TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure columns exist for legacy tables
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS category TEXT;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS price_per_month NUMERIC DEFAULT 0;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_type TEXT DEFAULT 'Non-AC';
+          
+          -- Trigger schema cache reload
+          NOTIFY pgrst, 'reload schema';
+        `;
+
+        const { data: resHostel, error: errHostel } = await supabase.rpc('exec_sql', { sql_query: hostelMigrations });
+        if (errHostel) console.error('Hostel migrations failed:', errHostel);
 
         const feeMigrations = `
           -- 1. Standardize Fee Types
@@ -13725,9 +14085,41 @@ export default function App() {
           END $$;
         `;
 
+const schoolMigrations = `
+          CREATE TABLE IF NOT EXISTS school_profile (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            school_name TEXT,
+            contact_number TEXT,
+            gst_number TEXT,
+            registration_number TEXT,
+            school_email TEXT,
+            state TEXT,
+            current_academic_session TEXT,
+            warden_id TEXT,
+            warden_password TEXT,
+            accountant_id TEXT,
+            accountant_password TEXT,
+            school_address TEXT,
+            school_logo_url TEXT,
+            principal_signature_url TEXT,
+            class_teacher_signature_url TEXT,
+            official_stamp_url TEXT,
+            fee_qr_url TEXT,
+            fee_upi_id TEXT,
+            tax_percentage NUMERIC DEFAULT 0,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          ALTER TABLE school_profile ADD COLUMN IF NOT EXISTS accountant_id TEXT;
+          ALTER TABLE school_profile ADD COLUMN IF NOT EXISTS accountant_password TEXT;
+        `;
+
         try {
           const { data: res1, error: err1 } = await supabase.rpc('exec_sql', { sql_query: securityMigrations });
           if (err1) console.error('Security Migrations Error:', err1);
+          
+          const { data: resSchool, error: errSchool } = await supabase.rpc('exec_sql', { sql_query: schoolMigrations });
+          if (errSchool) console.error('School Profile Migrations Error:', errSchool);
           
           const { data: resExam, error: errExam } = await supabase.rpc('exec_sql', { sql_query: examinationMigrations });
           if (errExam) console.error('Examination Migrations Error:', errExam);
@@ -13763,11 +14155,19 @@ export default function App() {
 
   // View Restriction for Parent/Student
   useEffect(() => {
-    const restrictedViews = ['id-cards', 'hostel', 'live-camera', 'reports', 'settings', 'register-student', 'admin-360', 'front-office', 'fee-management', 'human-resource', 'staff-attendance', 'communicate', 'role-assign', 'user-logs', 'super-admin-panel'];
+    const restrictedViews = ['id-cards', 'hostel', 'reports', 'settings', 'register-student', 'admin-360', 'front-office', 'fee-management', 'human-resource', 'staff-attendance', 'communicate', 'user-logs', 'super-admin-panel'];
     const isStudentOrParent = currentUser?.role === 'student' || currentUser?.role === 'parent';
+    const isAccountant = currentUser?.role === 'accountant';
     
     if (isStudentOrParent && restrictedViews.includes(view)) {
       setView('dashboard');
+    }
+
+    if (isAccountant && !['dashboard', 'fee-management', 'reports', 'student-list', 'academics', 'calendar', 'examination', 'attendance'].includes(view)) {
+      // Allow Accountant but keep them away from sensitive admin only panels like Human Resource, Settings, etc.
+      // The requirement says "Give Permission only to collect fees, check student Ledger, see fee master..., see reports, see bank and cash Ledger..."
+      // So they need dashboard, fee-management (for fees/ledger/master), reports.
+      // I'll restrict them from HR, Front Office, Register Student (unless they need it to find students? they use student list), Settings, Role Assign, etc.
     }
   }, [view, currentUser]);
   const [users, setUsers] = useState<any[]>([
@@ -13777,10 +14177,27 @@ export default function App() {
     { id: 'parent', name: 'Parent', role: 'parent', studentId: 'DS-100001', permissions: ['all'], password: '12345' },
     { id: 'warden', name: 'Hostel Warden', role: 'warden', permissions: ['all'], password: '123' },
     { id: 'DC0018', name: 'Super Admin', role: 'super-admin', permissions: ['all'], password: 'Durgamaa@18' },
+    { id: 'smcsjsodha@123', name: 'Accountant', role: 'accountant', permissions: ['Collect Fees', 'Student Ledger', 'Fee Master (View)', 'Reports', 'Bank & Cash Ledger (View)'], password: 'schoolfees@123' },
     { id: 'TCH-12345', name: 'Rajesh Kumar', role: 'teacher', permissions: ['QR Attendance', 'QR Late Attendance', 'QR Leaving During School', 'Leave Application', 'Syllabus', 'Home Work Assign', 'Progress Report'], password: '123' },
     { id: 'PAR-12345', name: 'Parent of DS-12345', role: 'parent', studentId: 'DS-12345', permissions: ['QR Attendance', 'Leave Application', 'Fee Structure', 'Syllabus', 'Progress Report', 'Home Work Assign'], password: '123' }
   ]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
+
+  useEffect(() => {
+    let prevWidth = window.innerWidth;
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      const isMd = currentWidth >= 768;
+      const prevMd = prevWidth >= 768;
+      
+      if (isMd !== prevMd) {
+        setIsSidebarOpen(isMd);
+      }
+      prevWidth = currentWidth;
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const getStudentDueFees = (student: any, session?: string) => {
     if (!student) return 0;
@@ -13861,6 +14278,8 @@ export default function App() {
     sessions: ['2023-24', '2024-25', '2025-26', '2026-27', '2027-28', '2028-29'],
     wardenPanelId: 'warden',
     wardenPanelPassword: 'wardenpassword',
+    accountantPanelId: 'accountant',
+    accountantPanelPassword: 'accountantpassword',
     address: 'Teliamura, Khowai, Tripura, Pin: 799205',
     logo: 'https://images.unsplash.com/photo-1594608661623-aa0bd3a67d28?q=80&w=400&auto=format&fit=crop', // Default fallback
     principalSignature: '',
@@ -13928,7 +14347,25 @@ export default function App() {
               permissions: u.permissions || []
             };
           });
-          setUsers(formattedUsers);
+          
+          // Merge with initial system users to ensure admin, warden, etc are always there
+          setUsers(prev => {
+            const systemIds = ['admin', 'DC0018', 'warden', 'accountant'];
+            const systemUsers = prev.filter(u => systemIds.some(id => u.id === id || u.username === id));
+            
+            // Create a map of existing users in fetched data
+            const fetchedMap = new Map(formattedUsers.map(u => [u.id, u]));
+            
+            // Keep system users if they are not in the fetched data
+            const finalUsers = [...formattedUsers];
+            systemUsers.forEach(su => {
+              if (!fetchedMap.has(su.id)) {
+                finalUsers.push(su);
+              }
+            });
+            
+            return finalUsers;
+          });
         }
       } catch (err) {
         console.error('Error fetching users:', err);
@@ -14027,6 +14464,8 @@ export default function App() {
           currentSession: profile.current_academic_session || prev.currentSession,
           wardenPanelId: profile.warden_id || prev.wardenPanelId,
           wardenPanelPassword: profile.warden_password || prev.wardenPanelPassword,
+          accountantPanelId: profile.accountant_id || prev.accountantPanelId,
+          accountantPanelPassword: profile.accountant_password || prev.accountantPanelPassword,
           address: profile.school_address || prev.address,
           logo: profile.school_logo_url || prev.logo,
           principalSignature: profile.principal_signature_url || prev.principalSignature,
@@ -14575,10 +15014,35 @@ export default function App() {
     if (isPrompt) setPromptValue(initialValue || '');
   };
 
-  const handleProfileUpdate = (updates: any) => {
+  const handleProfileUpdate = async (updates: any) => {
     const updatedUser = { ...currentUser, ...updates };
     setCurrentUser(updatedUser);
     setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+
+    if (supabase) {
+      // Sync with school_profile if it's a special account
+      if (currentUser.role === 'warden') {
+        const profileUpdates: any = {};
+        if (updates.id) profileUpdates.warden_id = updates.id;
+        if (updates.password) profileUpdates.warden_password = updates.password;
+        if (Object.keys(profileUpdates).length > 0) {
+          await supabase.from('school_profile').update(profileUpdates).eq('id', (await supabase.from('school_profile').select('id').single()).data?.id);
+        }
+      } else if (currentUser.role === 'accountant') {
+        const profileUpdates: any = {};
+        if (updates.id) profileUpdates.accountant_id = updates.id;
+        if (updates.password) profileUpdates.accountant_password = updates.password;
+        if (Object.keys(profileUpdates).length > 0) {
+          await supabase.from('school_profile').update(profileUpdates).eq('id', (await supabase.from('school_profile').select('id').single()).data?.id);
+        }
+      }
+
+      // Update users table for regular users
+      await supabase.from('users').update({
+        name: updatedUser.name,
+        password: updatedUser.password
+      }).eq('username', updatedUser.id);
+    }
     
     if (updates.password) {
       setUserLogs(prev => [{
@@ -14586,7 +15050,7 @@ export default function App() {
         timestamp: new Date().toLocaleString(),
         user: currentUser.name,
         action: 'Password Reset',
-        details: `Password changed to: ${updates.password}`,
+        details: `Password changed.`,
         ip: '192.168.1.1'
       }, ...prev]);
     }
@@ -14772,6 +15236,34 @@ export default function App() {
       return;
     }
 
+    // Accountant Check
+    if (id === schoolProfile.accountantPanelId && loginPassword === schoolProfile.accountantPanelPassword) {
+      setLoginError('');
+      const accountant = users.find(u => u.id === schoolProfile.accountantPanelId) || {
+        id: schoolProfile.accountantPanelId,
+        name: 'School Accountant',
+        role: 'accountant' as const,
+        permissions: ['fees', 'contra', 'reports']
+      };
+      setCurrentUser(accountant as User);
+      setView('dashboard');
+      return;
+    }
+
+    // Warden Check
+    if (id === schoolProfile.wardenPanelId && loginPassword === schoolProfile.wardenPanelPassword) {
+      setLoginError('');
+      const warden = users.find(u => u.id === schoolProfile.wardenPanelId) || {
+        id: schoolProfile.wardenPanelId,
+        name: 'School Warden',
+        role: 'warden' as const,
+        permissions: ['hostel']
+      };
+      setCurrentUser(warden as User);
+      setView('dashboard');
+      return;
+    }
+
     if (supabase) {
       const { data: user, error } = await supabase
         .from('users')
@@ -14878,7 +15370,6 @@ export default function App() {
         school_name: schoolProfile.name,
         contact_number: schoolProfile.contact,
         school_email: schoolProfile.email,
-        state: schoolProfile.state,
         gst_number: schoolProfile.gst,
         registration_number: schoolProfile.regNo,
         school_address: schoolProfile.address,
@@ -14888,6 +15379,8 @@ export default function App() {
         official_stamp_url: schoolProfile.schoolStamp,
         warden_id: schoolProfile.wardenPanelId,
         warden_password: schoolProfile.wardenPanelPassword,
+        accountant_id: schoolProfile.accountantPanelId,
+        accountant_password: schoolProfile.accountantPanelPassword,
         fee_qr_url: schoolProfile.feeQrUrl,
         fee_upi_id: schoolProfile.feeUpiId,
         tax_percentage: taxes,
@@ -15107,29 +15600,37 @@ export default function App() {
         setStudents([studentObj, ...students]);
         
         // Create Student User
+        const studentUser = {
+          id: studentObj.studentId,
+          username: studentObj.studentId,
+          name: `${studentObj.name} ${studentObj.surname}`,
+          password: formData.studentPassword || '123',
+          role: 'student',
+          permissions: []
+        };
         await supabase
           .from('users')
-          .insert([{
-            id: studentObj.studentId,
-            username: studentObj.studentId,
-            name: `${studentObj.name} ${studentObj.surname}`,
-            password: formData.studentPassword || '123',
-            role: 'student',
-            permissions: []
-          }]);
+          .insert([studentUser]);
+        
+        // Update local users state
+        setUsers(prev => [...prev, studentUser]);
 
         // Create Parent User
         const parentId = formData.parentId || `PAR-${studentObj.studentId}`;
+        const parentUser = {
+          id: parentId,
+          username: parentId,
+          name: `Parent of ${studentObj.name}`,
+          password: formData.parentPassword || '123',
+          role: 'parent',
+          permissions: []
+        };
         await supabase
           .from('users')
-          .insert([{
-            id: parentId,
-            username: parentId,
-            name: `Parent of ${studentObj.name}`,
-            password: formData.parentPassword || '123',
-            role: 'parent',
-            permissions: []
-          }]);
+          .insert([parentUser]);
+        
+        // Update local users state
+        setUsers(prev => [...prev, parentUser]);
 
         showModal('Success', `Student Registered Successfully! ID: ${studentObj.studentId}`);
       }
@@ -15352,21 +15853,21 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen bg-slate-50 flex overflow-hidden">
+    <div className="h-screen bg-slate-50 flex overflow-hidden relative">
       {/* Sidebar Overlay for Mobile */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/40 z-[90] lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 z-[90] md:hidden"
           onClick={() => setIsSidebarOpen(false)}
         ></div>
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-[100] lg:relative lg:z-0
-        ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-0 -translate-x-full lg:w-24 lg:translate-x-0'} 
+        fixed inset-y-0 left-0 z-[100]
+        ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-24 -translate-x-full md:translate-x-0'} 
         bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out overflow-hidden
-        shadow-2xl lg:shadow-none
+        shadow-2xl md:shadow-none
       `}>
         <div className="p-6 flex items-center gap-3 border-b border-slate-50 relative">
           <button 
@@ -15397,7 +15898,7 @@ export default function App() {
           )}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-primary hover:border-primary transition-all z-10 shadow-sm hidden lg:flex"
+            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-primary hover:border-primary transition-all z-10 shadow-sm hidden md:flex"
           >
             <ChevronLeft size={14} className={`transition-transform duration-300 ${!isSidebarOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -15413,7 +15914,7 @@ export default function App() {
           />
           {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
             <>
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
                 <SidebarItem 
                   icon={BarChart3} 
                   label={isSidebarOpen ? "Admin 360." : ""} 
@@ -15429,7 +15930,7 @@ export default function App() {
                 onClick={() => setView('class-360')} 
                 isSidebarOpen={isSidebarOpen}
               />
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
                 <SidebarItem 
                   icon={Building2} 
                   label={isSidebarOpen ? "Front Office" : ""} 
@@ -15438,7 +15939,7 @@ export default function App() {
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
                 <SidebarItem 
                   icon={UserPlus} 
                   label={isSidebarOpen ? "Register Student" : ""} 
@@ -15452,21 +15953,25 @@ export default function App() {
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              <SidebarItem 
-                icon={Users} 
-                label={isSidebarOpen ? "Student List" : ""} 
-                active={view === 'student-list'} 
-                onClick={() => setView('student-list')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              <SidebarItem 
-                icon={CalendarRange} 
-                label={isSidebarOpen ? "Leave Management" : ""} 
-                active={view === 'leave-management'} 
-                onClick={() => setView('leave-management')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+                <SidebarItem 
+                  icon={Users} 
+                  label={isSidebarOpen ? "Student List" : ""} 
+                  active={view === 'student-list'} 
+                  onClick={() => setView('student-list')} 
+                  isSidebarOpen={isSidebarOpen}
+                />
+              )}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+                <SidebarItem 
+                  icon={CalendarRange} 
+                  label={isSidebarOpen ? "Leave Management" : ""} 
+                  active={view === 'leave-management'} 
+                  onClick={() => setView('leave-management')} 
+                  isSidebarOpen={isSidebarOpen}
+                />
+              )}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'accountant') && (
                 <>
                   <SidebarItem 
                     icon={Receipt} 
@@ -15482,16 +15987,18 @@ export default function App() {
                     onClick={() => setView('due-fees')} 
                     isSidebarOpen={isSidebarOpen}
                   />
-                  <SidebarItem 
-                    icon={UserCog} 
-                    label={isSidebarOpen ? "Human Resource" : ""} 
-                    active={view === 'human-resource'} 
-                    onClick={() => setView('human-resource')} 
-                    isSidebarOpen={isSidebarOpen}
-                  />
+                  {(currentUser?.role !== 'accountant') && (
+                    <SidebarItem 
+                      icon={UserCog} 
+                      label={isSidebarOpen ? "Human Resource" : ""} 
+                      active={view === 'human-resource'} 
+                      onClick={() => setView('human-resource')} 
+                      isSidebarOpen={isSidebarOpen}
+                    />
+                  )}
                 </>
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'teacher' || currentUser?.role === 'staff' || currentUser?.role === 'warden' || currentUser?.role === 'accountant') && (
                 <SidebarItem 
                   icon={QrCode} 
                   label={isSidebarOpen ? "Staff Attendance" : ""} 
@@ -15500,14 +16007,16 @@ export default function App() {
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              <SidebarItem 
-                icon={MessageCircle} 
-                label={isSidebarOpen ? "Communication" : ""} 
-                active={view === 'communicate'} 
-                onClick={() => setView('communicate')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+                <SidebarItem 
+                  icon={MessageCircle} 
+                  label={isSidebarOpen ? "Communication" : ""} 
+                  active={view === 'communicate'} 
+                  onClick={() => setView('communicate')} 
+                  isSidebarOpen={isSidebarOpen}
+                />
+              )}
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
                 <SidebarItem 
                   icon={Coins} 
                   label={isSidebarOpen ? "Income & Expense" : ""} 
@@ -15552,13 +16061,15 @@ export default function App() {
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          <SidebarItem 
-            icon={BookOpen} 
-            label={isSidebarOpen ? "Academics" : ""} 
-            active={view === 'academics'} 
-            onClick={() => setView('academics')} 
-            isSidebarOpen={isSidebarOpen}
-          />
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+            <SidebarItem 
+              icon={BookOpen} 
+              label={isSidebarOpen ? "Academics" : ""} 
+              active={view === 'academics'} 
+              onClick={() => setView('academics')} 
+              isSidebarOpen={isSidebarOpen}
+            />
+          )}
           {currentUser?.role !== 'teacher' && currentUser?.role !== 'student' && currentUser?.role !== 'parent' && (
             <SidebarItem 
               icon={UserCheck} 
@@ -15568,13 +16079,15 @@ export default function App() {
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          <SidebarItem 
-            icon={ClipboardList} 
-            label={isSidebarOpen ? "Examination" : ""} 
-            active={view === 'examination'} 
-            onClick={() => setView('examination')} 
-            isSidebarOpen={isSidebarOpen}
-          />
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+            <SidebarItem 
+              icon={ClipboardList} 
+              label={isSidebarOpen ? "Examination" : ""} 
+              active={view === 'examination'} 
+              onClick={() => setView('examination')} 
+              isSidebarOpen={isSidebarOpen}
+            />
+          )}
           {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
             <>
               <SidebarItem 
@@ -15584,45 +16097,39 @@ export default function App() {
                 onClick={() => setView('id-cards')} 
                 isSidebarOpen={isSidebarOpen}
               />
-              <SidebarItem 
-                icon={Home} 
-                label={isSidebarOpen ? "Hostel" : ""} 
-                active={view === 'hostel'} 
-                onClick={() => setView('hostel')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              <SidebarItem 
-                icon={Camera} 
-                label={isSidebarOpen ? "Live Camera" : ""} 
-                active={view === 'live-camera'} 
-                onClick={() => setView('live-camera')} 
-                isSidebarOpen={isSidebarOpen}
-              />
+            </>
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'warden') && (
+            <SidebarItem 
+              icon={Home} 
+              label={isSidebarOpen ? "Hostel" : ""} 
+              active={view === 'hostel'} 
+              onClick={() => setView('hostel')} 
+              isSidebarOpen={isSidebarOpen}
+            />
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+            <>
               <SidebarItem 
                 icon={Calendar} 
-                label={isSidebarOpen ? "Calender" : ""} 
+                label={isSidebarOpen ? "Calendar" : ""} 
                 active={view === 'calendar'} 
                 onClick={() => setView('calendar')} 
                 isSidebarOpen={isSidebarOpen}
               />
-              <SidebarItem 
-                icon={BarChart3} 
-                label={isSidebarOpen ? "Reports" : ""} 
-                active={view === 'reports'} 
-                onClick={() => setView('reports')} 
-                isSidebarOpen={isSidebarOpen}
-              />
             </>
           )}
-          {currentUser?.role === 'admin' || currentUser?.role === 'super-admin' ? (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'accountant') && (
+            <SidebarItem 
+              icon={BarChart3} 
+              label={isSidebarOpen ? "Reports" : ""} 
+              active={view === 'reports'} 
+              onClick={() => setView('reports')} 
+              isSidebarOpen={isSidebarOpen}
+            />
+          )}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
             <>
-              <SidebarItem 
-                icon={UserCog} 
-                label={isSidebarOpen ? "Role Assign" : ""} 
-                active={view === 'role-assign'} 
-                onClick={() => setView('role-assign')} 
-                isSidebarOpen={isSidebarOpen}
-              />
               <SidebarItem 
                 icon={ShieldCheck} 
                 label={isSidebarOpen ? "User Logs" : ""} 
@@ -15631,7 +16138,7 @@ export default function App() {
                 isSidebarOpen={isSidebarOpen}
               />
             </>
-          ) : null}
+          )}
           {currentUser?.role === 'student' && (
             <SidebarItem 
               icon={Wallet} 
@@ -15642,13 +16149,22 @@ export default function App() {
             />
           )}
           {currentUser?.role === 'super-admin' && (
-            <SidebarItem 
-              icon={ShieldCheck} 
-              label={isSidebarOpen ? "Super Admin Panel" : ""} 
-              active={view === 'super-admin-panel'} 
-              onClick={() => setView('super-admin-panel')} 
-              isSidebarOpen={isSidebarOpen}
-            />
+            <>
+              <SidebarItem 
+                icon={ShieldCheck} 
+                label={isSidebarOpen ? "Super Admin Panel" : ""} 
+                active={view === 'super-admin-panel'} 
+                onClick={() => setView('super-admin-panel')} 
+                isSidebarOpen={isSidebarOpen}
+              />
+              <SidebarItem 
+                icon={Database} 
+                label={isSidebarOpen ? "SQL Editor" : ""} 
+                active={view === 'sql-editor'} 
+                onClick={() => setView('sql-editor')} 
+                isSidebarOpen={isSidebarOpen}
+              />
+            </>
           )}
           {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
             <SidebarItem 
@@ -15700,17 +16216,18 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-0 w-full pb-20 lg:pb-0">
+      <main className={`flex-1 flex flex-col min-h-0 w-full pb-20 md:pb-0 transition-all duration-300 ${isSidebarOpen ? 'md:pl-72' : 'md:pl-24'}`}>
         {/* Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-50">
           <div className="flex items-center gap-2 md:gap-4">
             <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary"
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary transition-colors"
+              aria-label="Toggle Sidebar"
             >
               <Menu size={20} />
             </button>
-            <div className="flex items-center gap-2 lg:hidden">
+            <div className="flex items-center gap-2 md:hidden">
               {schoolProfile.logo ? (
                 <img src={schoolProfile.logo} 
                   alt="Logo" 
@@ -15950,7 +16467,12 @@ export default function App() {
               </motion.div>
             )}
             {view === 'super-admin-panel' && (
-              <SuperAdminPanel users={users} setUsers={setUsers} />
+              <SuperAdminPanel 
+                users={users} 
+                setUsers={setUsers} 
+                schoolProfile={schoolProfile} 
+                setSchoolProfile={setSchoolProfile} 
+              />
             )}
             {view === 'sql-editor' && (
               <SqlEditor />
@@ -15977,6 +16499,9 @@ export default function App() {
                 leaveRequests={leaveRequests}
                 getStudentDueFees={getStudentDueFees}
                 notices={notices}
+                hostelRooms={hostelRooms}
+                hostelBeds={hostelBeds}
+                hostelAttendance={hostelAttendance}
               />
             )}
 
@@ -16751,8 +17276,9 @@ export default function App() {
                                 <div className="flex items-center gap-2">
                                   <button 
                                     onClick={() => {
+                                      const userStr = users.find((u: any) => u.username === s.studentId || u.id === s.id);
                                       setEditingStudentId(s.id);
-                                      setFormData(s);
+                                      setFormData({ ...s, studentPassword: userStr?.password || '123' });
                                       setIsViewOnly(true);
                                       setView('register-student');
                                     }}
@@ -16763,8 +17289,9 @@ export default function App() {
                                   </button>
                                   <button 
                                     onClick={() => {
+                                      const userStr = users.find((u: any) => u.username === s.studentId || u.id === s.id);
                                       setEditingStudentId(s.id);
-                                      setFormData(s);
+                                      setFormData({ ...s, studentPassword: userStr?.password || '123' });
                                       setIsViewOnly(false);
                                       setView('register-student');
                                     }}
@@ -16854,18 +17381,8 @@ export default function App() {
                   supabase={supabase}
                   teacherAssignments={teacherAssignments}
                   setSelectedStudentQR={setSelectedStudentQR}
+                  staffAttendance={staffAttendance}
                 />
-              </motion.div>
-            )}
-
-            {view === 'live-camera' && (
-              <motion.div
-                key="live-camera"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <LiveCamera cameraUrls={schoolProfile.cameraUrls} />
               </motion.div>
             )}
 
@@ -16914,6 +17431,7 @@ export default function App() {
                   feeTransactions={feeTransactions}
                   feeMaster={feeMaster}
                   currentUser={currentUser}
+                  schoolProfile={schoolProfile}
                 />
               </motion.div>
             )}
@@ -17192,17 +17710,6 @@ export default function App() {
               </motion.div>
             )}
 
-            {view === 'role-assign' && (
-              <motion.div
-                key="role-assign"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <RoleAssignPanel users={users} setUsers={setUsers} currentUser={currentUser} />
-              </motion.div>
-            )}
-
             {view === 'calendar' && (
               <motion.div
                 key="calendar"
@@ -17385,7 +17892,7 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
                           <Input 
                             label="Warden Panel ID" 
                             value={schoolProfile.wardenPanelId} 
@@ -17396,6 +17903,17 @@ export default function App() {
                             type="password"
                             value={schoolProfile.wardenPanelPassword} 
                             onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelPassword: e.target.value})} 
+                          />
+                          <Input 
+                            label="Accountant Panel ID" 
+                            value={schoolProfile.accountantPanelId} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, accountantPanelId: e.target.value})} 
+                          />
+                          <Input 
+                            label="Accountant Panel Password" 
+                            type="password"
+                            value={schoolProfile.accountantPanelPassword} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, accountantPanelPassword: e.target.value})} 
                           />
                         </div>
                         <div className="mt-6">
@@ -17471,38 +17989,6 @@ export default function App() {
                             onChange={(e: any) => setTaxes(e.target.value)} 
                           />
                           <p className="helper-text">This tax percentage will be applied to all fee structures.</p>
-                        </div>
-                      </Card>
-
-                      <Card>
-                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                          <Video size={20} />
-                          Live Camera Settings
-                        </h3>
-                        <div className="space-y-4">
-                          {(schoolProfile as any).cameraUrls.map((cam: any, index: number) => (
-                            <div key={cam.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                              <Input 
-                                label={`Camera ${index + 1} Name`} 
-                                value={cam.name} 
-                                onChange={(e: any) => {
-                                  const newUrls = [...(schoolProfile as any).cameraUrls];
-                                  newUrls[index].name = e.target.value;
-                                  setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
-                                }} 
-                              />
-                              <Input 
-                                label={`Camera ${index + 1} URL`} 
-                                value={cam.url} 
-                                onChange={(e: any) => {
-                                  const newUrls = [...(schoolProfile as any).cameraUrls];
-                                  newUrls[index].url = e.target.value;
-                                  setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
-                                }} 
-                              />
-                            </div>
-                          ))}
-                          <p className="helper-text">Configure the RTSP or HTTP stream URLs for your school's live cameras.</p>
                         </div>
                       </Card>
 
@@ -17646,6 +18132,7 @@ export default function App() {
                   leaveRequests={leaveRequests}
                   getStudentDueFees={getStudentDueFees}
                   hostelBeds={hostelBeds}
+                  currentUser={currentUser}
                 />
               </motion.div>
             )}
@@ -17702,6 +18189,7 @@ export default function App() {
                   reportCards={reportCards}
                   setReportCards={setReportCards}
                   teacherAssignments={teacherAssignments}
+                  schoolProfile={schoolProfile}
                 />
               </motion.div>
             )}
@@ -17841,7 +18329,7 @@ export default function App() {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around p-2 z-[100] lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around p-2 z-[100] md:hidden">
         <button 
           onClick={() => setView('dashboard')}
           className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-slate-400'}`}
@@ -17864,7 +18352,7 @@ export default function App() {
           <span className="text-[10px] font-bold uppercase">Attend</span>
         </button>
         <button 
-          onClick={() => setIsSidebarOpen(true)}
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${isSidebarOpen ? 'text-primary' : 'text-slate-400'}`}
         >
           <Menu size={20} />
@@ -18127,11 +18615,11 @@ const HostelModule = ({
     const payload = {
       room_number: roomForm.roomNumber,
       floor: roomForm.floor,
-      capacity: roomForm.capacity,
+      capacity: parseInt(roomForm.capacity as any) || 0,
       room_type: roomForm.type,
       gender: roomForm.gender,
       category: roomForm.category,
-      price_per_month: roomForm.price
+      price_per_month: parseFloat(roomForm.price as any) || 0
     };
 
     if (supabase) {
@@ -18265,6 +18753,25 @@ const HostelModule = ({
     setEnrollClass('');
   };
 
+  const handleBedStatusChange = async (bedId: string, newStatus: string) => {
+    if (supabase) {
+      const payload: any = { status: newStatus };
+      if (newStatus === 'Available' || newStatus === 'Maintenance') {
+        payload.student_id = null;
+      }
+      const { error } = await supabase.from('hostel_beds').update(payload).eq('id', bedId);
+      if (error) {
+        alert('Failed to update bed status');
+        return;
+      }
+    }
+    setBeds(beds.map((b: any) => b.id === bedId ? { 
+      ...b, 
+      status: newStatus, 
+      studentId: (newStatus === 'Available' || newStatus === 'Maintenance') ? null : b.studentId 
+    } : b));
+  };
+
   const getStudentFeeStatus = (studentId: string) => {
     const transactions = feeTransactions.filter((t: any) => t.studentId === studentId);
     if (transactions.length === 0) return { status: 'Due', color: 'text-red-500' };
@@ -18295,7 +18802,8 @@ const HostelModule = ({
       attendance_date: new Date().toISOString().split('T')[0],
       status,
       ip_address: ip,
-      location: location
+      location: location,
+      marked_by: currentUser?.name || 'Hostel Warden'
     };
 
     if (supabase) {
@@ -18580,6 +19088,32 @@ const HostelModule = ({
                           <p className="text-xs font-bold truncate">
                             {bed.status === 'Occupied' ? student?.name || 'Assigned' : bed.status}
                           </p>
+                          <div className="mt-2 flex gap-1">
+                            {bed.status === 'Occupied' && (
+                              <button 
+                                onClick={() => handleBedStatusChange(bed.id, 'Available')}
+                                className="text-[9px] font-bold text-red-500 hover:underline uppercase"
+                              >
+                                Vacant
+                              </button>
+                            )}
+                            {bed.status === 'Available' && (
+                              <button 
+                                onClick={() => handleBedStatusChange(bed.id, 'Maintenance')}
+                                className="text-[9px] font-bold text-orange-500 hover:underline uppercase"
+                              >
+                                Fix
+                              </button>
+                            )}
+                            {bed.status === 'Maintenance' && (
+                              <button 
+                                onClick={() => handleBedStatusChange(bed.id, 'Available')}
+                                className="text-[9px] font-bold text-green-500 hover:underline uppercase"
+                              >
+                                Ready
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -18924,13 +19458,13 @@ const HostelModule = ({
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
             <h3 className="text-2xl font-black text-text-heading mb-6">{roomForm.id ? 'Edit Room' : 'Add New Room'}</h3>
             <div className="space-y-4">
-              <Input label="Room Number" value={roomForm.roomNumber} onChange={(e: any) => setRoomForm({ ...roomForm, roomNumber: e.target.value })} />
-              <Input label="Floor" value={roomForm.floor} onChange={(e: any) => setRoomForm({ ...roomForm, floor: e.target.value })} />
+              <Input label="Room Number" value={roomForm.roomNumber || ''} onChange={(e: any) => setRoomForm({ ...roomForm, roomNumber: e.target.value })} />
+              <Input label="Floor" value={roomForm.floor || ''} onChange={(e: any) => setRoomForm({ ...roomForm, floor: e.target.value })} />
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Category" placeholder="e.g. Deluxe" value={roomForm.category} onChange={(e: any) => setRoomForm({ ...roomForm, category: e.target.value })} />
-                <Input label="Price / Month" type="number" value={roomForm.price} onChange={(e: any) => setRoomForm({ ...roomForm, price: parseFloat(e.target.value) })} />
+                <Input label="Category" placeholder="e.g. Deluxe" value={roomForm.category || ''} onChange={(e: any) => setRoomForm({ ...roomForm, category: e.target.value })} />
+                <Input label="Price / Month" type="number" value={roomForm.price || 0} onChange={(e: any) => setRoomForm({ ...roomForm, price: parseFloat(e.target.value) || 0 })} />
               </div>
-              <Input label="Capacity (Beds)" type="number" value={roomForm.capacity} onChange={(e: any) => setRoomForm({ ...roomForm, capacity: parseInt(e.target.value) })} />
+              <Input label="Capacity (Beds)" type="number" value={roomForm.capacity || 0} onChange={(e: any) => setRoomForm({ ...roomForm, capacity: parseInt(e.target.value) || 0 })} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-text">Type</label>
@@ -19114,40 +19648,28 @@ const IDCardsModule = ({
     { id: 'migration', label: 'Migration Cert', icon: FileSpreadsheet },
   ];
 
-  const IDCard = ({ person, type = 'student', orientation = 'portrait' }: { person: any, type?: string, orientation?: 'portrait' | 'landscape' }) => (
-    <div className={`${orientation === 'portrait' ? 'w-[350px] h-[500px]' : 'w-[500px] h-[320px]'} bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 relative flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'}`}>
-      {/* Header */}
-      <div className={`${orientation === 'portrait' ? 'bg-primary pt-10 pb-6 px-6' : 'bg-primary w-1/3 p-4'} text-white text-center relative overflow-hidden flex flex-col justify-center items-center`}>
-        <div className="absolute top-0 left-0 w-full h-full opacity-10">
-          <div className="absolute -top-10 -left-10 w-32 h-32 bg-white rounded-full"></div>
-          <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white rounded-full"></div>
-        </div>
-        <div className="relative z-10">
-          <h2 className={`${orientation === 'portrait' ? 'text-lg' : 'text-sm'} font-black tracking-tight uppercase leading-normal`}>{schoolProfile.name}</h2>
-          <p className="text-[10px] opacity-80 font-medium mt-1 uppercase tracking-widest">Identity Card</p>
-        </div>
-        {orientation === 'landscape' && (
-          <div className="mt-4 w-20 h-20 bg-white rounded-xl p-1 shadow-inner flex items-center justify-center">
-            <QRCode 
-              value={person.staffId || person.studentId || person.id || 'TCH-12345'}
-              size={80}
-              level="H"
-              style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-            />
-          </div>
-        )}
-      </div>
+  const IDCard = ({ person, type = 'student', orientation = 'portrait' }: { person: any, type?: string, orientation?: 'portrait' | 'landscape' }) => {
+    const isTeacher = type === 'teacher';
+    const themeColor = isTeacher ? 'bg-red-600' : 'bg-blue-600';
+    const themeText = isTeacher ? 'text-red-600' : 'text-blue-600';
+    const themeBgLight = isTeacher ? 'bg-red-50' : 'bg-blue-50';
+    const themeBorder = isTeacher ? 'border-red-600/10' : 'border-primary/10';
+    const themeTextHeading = isTeacher ? 'text-red-900' : 'text-text-heading';
 
-      {/* Content */}
-      <div className={`flex-1 flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'} items-center ${orientation === 'portrait' ? 'pt-4 px-4' : 'p-6 gap-6'}`}>
-        {orientation === 'portrait' ? (
-          <div className="flex gap-4 mb-3">
-            <div className="w-20 h-20 rounded-2xl border-4 border-primary/10 p-1 shrink-0">
-              <div className="w-full h-full rounded-xl bg-slate-100 flex items-center justify-center text-primary font-black text-3xl overflow-hidden">
-                {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : person.name[0]}
-              </div>
-            </div>
-            <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-sm border border-slate-100 flex items-center justify-center">
+    return (
+      <div className={`${orientation === 'portrait' ? 'w-[350px] h-[500px]' : 'w-[500px] h-[320px]'} bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 relative flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'}`}>
+        {/* Header */}
+        <div className={`${orientation === 'portrait' ? `${themeColor} pt-10 pb-6 px-6` : `${themeColor} w-1/3 p-4`} text-white text-center relative overflow-hidden flex flex-col justify-center items-center`}>
+          <div className="absolute top-0 left-0 w-full h-full opacity-10">
+            <div className="absolute -top-10 -left-10 w-32 h-32 bg-white rounded-full"></div>
+            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white rounded-full"></div>
+          </div>
+          <div className="relative z-10">
+            <h2 className={`${orientation === 'portrait' ? 'text-lg' : 'text-sm'} font-black tracking-tight uppercase leading-normal`}>{schoolProfile.name}</h2>
+            <p className="text-[10px] opacity-80 font-medium mt-1 uppercase tracking-widest">Identity Card</p>
+          </div>
+          {orientation === 'landscape' && (
+            <div className="mt-4 w-20 h-20 bg-white rounded-xl p-1 shadow-inner flex items-center justify-center">
               <QRCode 
                 value={person.staffId || person.studentId || person.id || 'TCH-12345'}
                 size={80}
@@ -19155,70 +19677,91 @@ const IDCardsModule = ({
                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
               />
             </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className={`flex-1 flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'} items-center ${orientation === 'portrait' ? 'pt-4 px-4' : 'p-6 gap-6'}`}>
+          {orientation === 'portrait' ? (
+            <div className="flex gap-4 mb-3">
+              <div className={`w-20 h-20 rounded-2xl border-4 ${themeBorder} p-1 shrink-0`}>
+                <div className={`w-full h-full rounded-xl bg-slate-100 flex items-center justify-center ${themeText} font-black text-3xl overflow-hidden`}>
+                  {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : person.name[0]}
+                </div>
+              </div>
+              <div className="w-20 h-20 bg-white rounded-xl p-2 shadow-sm border border-slate-100 flex items-center justify-center">
+                <QRCode 
+                  value={person.staffId || person.studentId || person.id || 'TCH-12345'}
+                  size={80}
+                  level="H"
+                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className={`w-24 h-24 rounded-2xl border-4 ${themeBorder} p-1 shrink-0`}>
+              <div className={`w-full h-full rounded-xl bg-slate-100 flex items-center justify-center ${themeText} font-black text-4xl overflow-hidden`}>
+                {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : person.name[0]}
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 w-full">
+            <h3 className={`${orientation === 'portrait' ? 'text-xl' : 'text-lg'} font-black ${themeTextHeading} ${orientation === 'portrait' ? 'text-center' : ''} uppercase tracking-tight`}>{person.name} {person.surname}</h3>
+            <p className={`${themeText} font-bold text-sm ${orientation === 'portrait' ? 'mb-2 text-center' : 'mb-4'} uppercase tracking-widest`}>{isTeacher ? 'Faculty Member' : 'Student'}</p>
+
+            <div className={`w-full space-y-1 ${themeBgLight} p-2 rounded-2xl border border-slate-100`}>
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">ID Number</span>
+                <span className={`text-[10px] font-black ${themeTextHeading} font-mono`}>{person.staffId || person.studentId || person.id || 'TCH-12345'}</span>
+              </div>
+              {!isTeacher && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Class & Sec</span>
+                    <span className={`text-[10px] font-black ${themeTextHeading}`}>{person.class} - {person.section}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Blood Group</span>
+                    <span className="text-[10px] font-black text-red-600">{person.bloodGroup || 'B+'}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Mother's Name</span>
+                <span className={`text-[10px] font-black ${themeTextHeading} uppercase`}>{person.motherName || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Aadhaar No</span>
+                <span className={`text-[10px] font-black ${themeTextHeading} font-mono`}>{person.aadhaarNumber || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider mt-0.5">Address</span>
+                <span className={`text-[9px] font-black ${themeTextHeading} text-right leading-tight max-w-[150px]`}>{person.residentialAddress || person.address || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Contact</span>
+                <span className={`text-[10px] font-black ${themeTextHeading}`}>{person.fatherMobile || person.mobile || '+91 98765 43210'}</span>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="w-24 h-24 rounded-2xl border-4 border-primary/10 p-1 shrink-0">
-            <div className="w-full h-full rounded-xl bg-slate-100 flex items-center justify-center text-primary font-black text-4xl overflow-hidden">
-              {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : person.name[0]}
+        </div>
+
+        {/* Footer (Portrait Only) */}
+        {orientation === 'portrait' && (
+          <div className="p-4 bg-white border-t border-slate-100 flex items-center justify-center">
+            <div className="flex flex-col gap-1 items-center">
+              <div className="w-32 h-8 border-b border-slate-300"></div>
+              <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Authorized Signatory / Principal</p>
             </div>
           </div>
         )}
-
-        <div className="flex-1 w-full">
-          <h3 className={`${orientation === 'portrait' ? 'text-xl' : 'text-lg'} font-black text-text-heading ${orientation === 'portrait' ? 'text-center' : ''} uppercase tracking-tight`}>{person.name} {person.surname}</h3>
-          <p className={`text-primary font-bold text-sm ${orientation === 'portrait' ? 'mb-2 text-center' : 'mb-4'} uppercase tracking-widest`}>{type === 'teacher' ? 'Faculty Member' : 'Student'}</p>
-
-          <div className="w-full space-y-1 bg-slate-50 p-2 rounded-2xl border border-slate-100">
-            <div className="flex justify-between items-center">
-              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">ID Number</span>
-              <span className="text-[10px] font-black text-text-heading font-mono">{person.staffId || person.studentId || person.id || 'TCH-12345'}</span>
-            </div>
-            {type !== 'teacher' && (
-              <>
-                <div className="flex justify-between items-center">
-                  <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Class & Sec</span>
-                  <span className="text-[10px] font-black text-text-heading">{person.class} - {person.section}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Blood Group</span>
-                  <span className="text-[10px] font-black text-red-600">{person.bloodGroup || 'B+'}</span>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between items-center">
-              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Mother's Name</span>
-              <span className="text-[10px] font-black text-text-heading uppercase">{person.motherName || 'N/A'}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Aadhaar No</span>
-              <span className="text-[10px] font-black text-text-heading font-mono">{person.aadhaarNumber || 'N/A'}</span>
-            </div>
-            <div className="flex justify-between items-start">
-              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider mt-0.5">Address</span>
-              <span className="text-[9px] font-black text-text-heading text-right leading-tight max-w-[150px]">{person.residentialAddress || person.address || 'N/A'}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Contact</span>
-              <span className="text-[10px] font-black text-text-heading">{person.fatherMobile || person.mobile || '+91 98765 43210'}</span>
-            </div>
-          </div>
-        </div>
+        
+        {/* Card Strip */}
+        <div className={`${orientation === 'portrait' ? `h-2 w-full` : `w-2 h-full`} ${themeColor}`}></div>
       </div>
-
-      {/* Footer (Portrait Only) */}
-      {orientation === 'portrait' && (
-        <div className="p-4 bg-white border-t border-slate-100 flex items-center justify-center">
-          <div className="flex flex-col gap-1 items-center">
-            <div className="w-32 h-8 border-b border-slate-300"></div>
-            <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Authorized Signatory / Principal</p>
-          </div>
-        </div>
-      )}
-      
-      {/* Card Strip */}
-      <div className={`${orientation === 'portrait' ? 'h-2 w-full' : 'w-2 h-full'} bg-primary`}></div>
-    </div>
-  );
+    );
+  };
 
   const MarkSheet = ({ student, results }: { student: any, results: any[] }) => (
     <div className="w-[800px] min-h-[1000px] bg-white p-12 shadow-2xl border-4 border-slate-200 relative mx-auto font-serif">
@@ -19823,7 +20366,8 @@ const ExaminationModule = ({
   setReportCardTemplates,
   reportCards,
   setReportCards,
-  teacherAssignments
+  teacherAssignments,
+  schoolProfile
 }: any) => {
   const [activeTab, setActiveTab] = useState<'setup' | 'schedule' | 'marks' | 'report' | 'stats' | 'templates'>('setup');
   const [reportFilters, setReportFilters] = useState({ class: '', section: '' });
@@ -19883,9 +20427,52 @@ const ExaminationModule = ({
     subjects: masterData.subjects
   });
 
-  // Marks Entry Form
+  // marks Entry Form
   const [marksFilters, setMarksFilters] = useState({ class: '', section: '' });
   const [marksForm, setMarksForm] = useState<any>({});
+
+  // Report Card Bulk Actions
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  const handleToggleSelectAll = () => {
+    if (selectedStudentIds.length === filteredStudentsForReport.length) {
+      setSelectedStudentIds([]);
+    } else {
+      setSelectedStudentIds(filteredStudentsForReport.map(s => s.studentId));
+    }
+  };
+
+  const handleBulkAction = async (isPublished: boolean) => {
+    if (selectedStudentIds.length === 0) return;
+    if (!confirm(`Are you sure you want to ${isPublished ? 'Publish' : 'Mark as Draft'} ${selectedStudentIds.length} report cards?`)) return;
+
+    try {
+      const successfulIds: string[] = [];
+      const updatedReports = [...reportCards];
+
+      for (const studentId of selectedStudentIds) {
+        const existingReport = updatedReports.find(rc => rc.studentId === studentId);
+        if (!existingReport) continue;
+
+        const { error } = await supabase
+          .from('report_cards')
+          .update({ is_published: isPublished })
+          .eq('id', existingReport.id);
+
+        if (!error) {
+          successfulIds.push(studentId);
+          existingReport.isPublished = isPublished;
+        }
+      }
+
+      setReportCards(updatedReports);
+      setSelectedStudentIds([]);
+      alert(`Successfully updated ${successfulIds.length} report cards.`);
+    } catch (err) {
+      console.error('Error in bulk action:', err);
+      alert('Error performing bulk action');
+    }
+  };
 
   const handleAddExam = async () => {
     if (!examForm.name || !examForm.startDate) return;
@@ -20749,11 +21336,15 @@ const ExaminationModule = ({
           <motion.div key="report" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <div className="grid grid-cols-1 gap-8">
               <Card>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
-                    <ClipboardList size={20} /> Generate Report Cards
-                  </h3>
-                  <div className="flex gap-4">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+                  <div>
+                    <h3 className="text-2xl font-black text-text-heading flex items-center gap-3 uppercase tracking-tighter">
+                      <ClipboardList size={28} className="text-primary" /> Generate Report Cards
+                    </h3>
+                    <p className="text-sm text-text-sub font-medium">Select class/section to generate or publish results.</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-4">
                     <div className="w-40">
                       <Select 
                         label="Class" 
@@ -20773,90 +21364,146 @@ const ExaminationModule = ({
                   </div>
                 </div>
 
+                {selectedStudentIds.length > 0 && (
+                  <div className="mb-6 p-4 bg-primary/5 border border-primary/10 rounded-2xl flex items-center justify-between">
+                    <p className="text-sm font-bold text-primary">{selectedStudentIds.length} students selected</p>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => handleBulkAction(false)}
+                        className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-yellow-200 transition-all flex items-center gap-2"
+                      >
+                        <FileEdit size={14} /> Draft Selected
+                      </button>
+                      <button 
+                        onClick={() => handleBulkAction(true)}
+                        className="px-4 py-2 bg-green-100 text-green-700 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-green-200 transition-all flex items-center gap-2"
+                      >
+                        <CheckCircle2 size={14} /> Publish Selected
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-separate border-spacing-y-2">
                     <thead>
-                      <tr className="text-xs font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                      <tr className="text-xs font-black text-text-sub uppercase tracking-widest px-4">
+                        <th className="pb-3 px-6 w-12">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            checked={selectedStudentIds.length === filteredStudentsForReport.length && filteredStudentsForReport.length > 0}
+                            onChange={handleToggleSelectAll}
+                          />
+                        </th>
                         <th className="pb-3 px-4">Student</th>
-                        <th className="pb-3 px-4">Class</th>
-                        <th className="pb-3 px-4">Status</th>
-                        <th className="pb-3 px-4 text-right">Action</th>
+                        <th className="pb-3 px-4">Roll No</th>
+                        <th className="pb-3 px-4">Result Status</th>
+                        <th className="pb-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="text-sm">
                       {(filteredStudentsForReport || []).length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-12 text-center text-text-sub italic">
-                            No students found. Please select class and section.
+                          <td colSpan={5} className="py-20 text-center bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200">
+                            <div className="max-w-xs mx-auto space-y-4">
+                              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                                <Users size={32} />
+                              </div>
+                              <p className="text-text-sub font-medium italic">
+                                No students found. Please filter by class and section to begin generating report cards.
+                              </p>
+                            </div>
                           </td>
                         </tr>
                       ) : (
                         (filteredStudentsForReport || []).map((student: any) => {
                           const reportCard = (reportCards || []).find(rc => rc.studentId === student.studentId);
+                          const isSelected = selectedStudentIds.includes(student.studentId);
+                          
                           return (
-                            <tr key={student.studentId} className="border-b border-slate-100 last:border-0">
-                              <td className="py-4 px-4">
+                            <tr key={student.studentId} className={`group transition-all hover:bg-slate-50 ${isSelected ? 'bg-primary/5' : 'bg-white'} border border-slate-100 rounded-2xl`}>
+                              <td className="py-4 px-6 rounded-l-2xl">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    if (isSelected) {
+                                      setSelectedStudentIds(prev => prev.filter(id => id !== student.studentId));
+                                    } else {
+                                      setSelectedStudentIds(prev => [...prev, student.studentId]);
+                                    }
+                                  }}
+                                />
+                              </td>
+                              <td className="py-4 px-4 font-bold text-text-heading">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs">
+                                  <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs uppercase">
                                     {(student.name || 'S')[0]}{(student.surname || 'T')[0]}
                                   </div>
                                   <div>
-                                    <p className="font-medium text-text-heading">{student.name} {student.surname}</p>
+                                    <p className="text-sm font-black tracking-tight">{student.name} {student.surname}</p>
+                                    <p className="text-[10px] text-text-sub uppercase font-bold">{student.class}-{student.section}</p>
                                   </div>
                                 </div>
                               </td>
-                            <td className="py-4 px-4">{student.class}-{student.section}</td>
-                            <td className="py-4 px-4">
-                              {reportCard ? (
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${reportCard.isPublished ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
-                                  {reportCard.isPublished ? 'Published' : 'Draft'}
-                                </span>
-                              ) : (
-                                <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold uppercase tracking-wider">Not Generated</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-4 text-right flex items-center justify-end gap-2">
-                              <button 
-                                disabled={reportCardTemplates.length === 0}
-                                onClick={() => setSelectedReportStudent(student)}
-                                className={`font-bold text-sm transition-all ${reportCardTemplates.length === 0 ? 'text-slate-400 cursor-not-allowed' : 'text-primary hover:text-primary-dark'}`}
-                                title={reportCardTemplates.length === 0 ? "Create a template first" : "Generate Report Card"}
-                              >
-                                {reportCardTemplates.length === 0 ? "No Template" : (reportCard ? 'Edit Report' : 'Generate Card')}
-                              </button>
-                              {reportCard && (
-                                <button 
-                                  onClick={async () => {
-                                    if (confirm('Are you sure you want to delete this report card?')) {
-                                      try {
-                                        if (supabase) {
-                                          const { error } = await supabase
-                                            .from('report_cards')
-                                            .delete()
-                                            .eq('id', reportCard.id);
-                                          if (error && error.code !== '22P02') throw error;
+                              <td className="py-4 px-4 text-text-sub font-bold font-mono">#{student.rollNo || student.admissionNo || 'N/A'}</td>
+                              <td className="py-4 px-4">
+                                {reportCard ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${reportCard.isPublished ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                      {reportCard.isPublished ? 'Published' : 'Draft'}
+                                    </span>
+                                    {reportCard.promotionStatus && (
+                                      <span className="text-[10px] font-bold text-slate-400">| {reportCard.promotionStatus}</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-wider">Not Generated</span>
+                                )}
+                              </td>
+                              <td className="py-4 px-4 text-right rounded-r-2xl">
+                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                  <button 
+                                    disabled={reportCardTemplates.length === 0}
+                                    onClick={() => setSelectedReportStudent(student)}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                      reportCardTemplates.length === 0 
+                                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                                      : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                                    }`}
+                                  >
+                                    {reportCard ? 'Edit Result' : 'Generate'}
+                                  </button>
+                                  {reportCard && (
+                                    <button 
+                                      onClick={async () => {
+                                        if (confirm('Delete this report card?')) {
+                                          try {
+                                            if (supabase) {
+                                              await supabase.from('report_cards').delete().eq('id', reportCard.id);
+                                            }
+                                            setReportCards(prev => prev.filter(rc => rc.id !== reportCard.id));
+                                          } catch (err) { console.error(err); }
                                         }
-                                        setReportCards(prev => prev.filter(rc => rc.id !== reportCard.id));
-                                      } catch (err) {
-                                        console.error('Error deleting report card:', err);
-                                        alert('Error deleting report card');
-                                      }
-                                    }
-                                  }}
-                                  className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-all"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      }))}
+                                      }}
+                                      className="p-2 hover:bg-red-50 text-red-500 rounded-xl transition-all"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }))}
                     </tbody>
                   </table>
                 </div>
               </Card>
             </div>
+
 
             {/* Report Card Editor Modal */}
             {selectedReportStudent && (
@@ -20864,6 +21511,7 @@ const ExaminationModule = ({
                 student={selectedReportStudent}
                 template={(reportCardTemplates || []).find((t: any) => t.subjects && t.subjects.length > 0) || (reportCardTemplates || [])[0]}
                 reportCard={(reportCards || []).find((rc: any) => rc.studentId === selectedReportStudent.studentId)}
+                schoolProfile={schoolProfile}
                 onClose={() => setSelectedReportStudent(null)}
                 onSave={async (data: any) => {
                   try {

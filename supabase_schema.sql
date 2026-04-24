@@ -858,6 +858,10 @@ BEGIN
             ALTER TABLE public.report_card_templates RENAME COLUMN "name" TO "template_name";
         END IF;
     END IF;
+
+    -- Hostel Rooms
+    ALTER TABLE IF EXISTS public.hostel_rooms ADD COLUMN IF NOT EXISTS category TEXT;
+    ALTER TABLE IF EXISTS public.hostel_rooms ADD COLUMN IF NOT EXISTS price_per_month NUMERIC DEFAULT 0;
 END $$;
 
 -- GRANT PERMISSIONS SO THE APP CAN AUTO-FIX LATER
@@ -865,3 +869,76 @@ GRANT EXECUTE ON FUNCTION exec_sql(text) TO anon, authenticated, service_role;
 
 -- REFRESH CACHE
 NOTIFY pgrst, 'reload schema';
+
+-- Ensure school_profile has credential columns
+ALTER TABLE school_profile 
+ADD COLUMN IF NOT EXISTS warden_id TEXT,
+ADD COLUMN IF NOT EXISTS warden_password TEXT,
+ADD COLUMN IF NOT EXISTS accountant_id TEXT,
+ADD COLUMN IF NOT EXISTS accountant_password TEXT;
+
+-- Default credentials (change these in settings)
+UPDATE school_profile 
+SET warden_id = COALESCE(warden_id, 'warden123'),
+    warden_password = COALESCE(warden_password, 'warden@123'),
+    accountant_id = COALESCE(accountant_id, 'acc123'),
+    accountant_password = COALESCE(accountant_password, 'acc@123')
+WHERE id = '00000000-0000-0000-0000-000000000001';
+
+-- Create Hostel Attendance table if missing
+CREATE TABLE IF NOT EXISTS hostel_attendance (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  student_id TEXT NOT NULL,
+  student_name TEXT,
+  room_number TEXT,
+  attendance_date DATE DEFAULT CURRENT_DATE,
+  status TEXT CHECK (status IN ('Present', 'Absent', 'Late', 'Leave')),
+  ip_address TEXT,
+  location TEXT,
+  remarks TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- EXAMINATION GRADING SYSTEM UPDATE
+-- Run this to ensure report cards table has all necessary features
+CREATE TABLE IF NOT EXISTS report_cards (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id TEXT NOT NULL,
+    template_id UUID NOT NULL,
+    term_data JSONB NOT NULL DEFAULT '{}',
+    result TEXT,
+    aggregate TEXT,
+    percentage DECIMAL,
+    rank TEXT,
+    teacher_comments TEXT,
+    promotion_status TEXT,
+    is_published BOOLEAN DEFAULT FALSE,
+    session TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- SQL Snippets table for Super Admin
+CREATE TABLE IF NOT EXISTS sql_snippets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    code TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Seed some useful snippets for Super Admin
+INSERT INTO sql_snippets (title, code) VALUES 
+('View All Users', 'SELECT id, username, name, role, password FROM users ORDER BY role;'),
+('Update Admin Password', 'UPDATE users SET password = ''new_password'' WHERE id = ''admin'';'),
+('List All Teachers', 'SELECT * FROM users WHERE role = ''teacher'';'),
+('View Warden Credentials', 'SELECT warden_id, warden_password FROM school_profile;'),
+('View Accountant Credentials', 'SELECT accountant_id, accountant_password FROM school_profile;'),
+('Reset Student Password', 'UPDATE users SET password = ''123'' WHERE role = ''student'';'),
+('Create New Staff User', 'INSERT INTO users (id, username, name, role, password) \nVALUES (''STAF-001'', ''staf001'', ''John Doe'', ''staff'', ''password123'');')
+ON CONFLICT DO NOTHING;
+
+-- Note: The grading logic (91-100 A+, 81-90 A, etc.) and the 50/50 Term weighting 
+-- are handled in the application layer (ReportCardView) to allow for 
+-- real-time updates without database locks.
+
+
+
