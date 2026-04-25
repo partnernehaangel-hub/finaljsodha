@@ -573,7 +573,71 @@ export const FeeManagement = ({
                   onChange={(e: any) => setSelectedLedgerSession(e.target.value)} 
                 />
               </div>
-              <button className="btn-secondary flex items-center gap-2 py-3 px-6"><Download size={18} /> Export Ledger</button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        const printWindow = window.open('', '_blank');
+                        if (!printWindow) return;
+                        
+                        const ledgerContent = document.getElementById('student-ledger-table');
+                        if (!ledgerContent) return;
+
+                        printWindow.document.write(`
+                          <html>
+                            <head>
+                              <title>Student Ledger - ${selectedLedgerStudent.name}</title>
+                              <style>
+                                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+                                body { font-family: 'Inter', sans-serif; padding: 20mm; color: #1e293b; }
+                                .header { text-align: center; margin-bottom: 30px; border-bottom: 4px solid #3b82f6; padding-bottom: 20px; }
+                                .school-name { font-size: 28px; font-weight: 900; text-transform: uppercase; color: #2563eb; }
+                                .ledger-title { font-size: 18px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 5px; }
+                                .student-info { display: grid; grid-template-cols: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8fafc; padding: 20px; rounded: 12px; }
+                                .info-item { display: flex; flex-direction: column; }
+                                .label { font-size: 10px; font-weight: 900; color: #64748b; text-transform: uppercase; }
+                                .value { font-size: 16px; font-weight: 700; }
+                                table { w-full; width: 100%; border-collapse: collapse; margin-top: 20px; }
+                                th { text-align: left; background: #f1f5f9; padding: 12px; font-size: 12px; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+                                td { padding: 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+                                .debit { color: #dc2626; font-weight: 700; }
+                                .credit { color: #16a34a; font-weight: 700; }
+                                .balance { font-weight: 900; color: #2563eb; }
+                                .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #94a3b8; }
+                                @media print { body { padding: 0; } }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="header">
+                                <div class="school-name">SCHOOL MANAGEMENT SYSTEM</div>
+                                <div class="ledger-title">Financial Student Ledger</div>
+                              </div>
+                              <div class="student-info">
+                                <div class="info-item"><span class="label">Student Name</span><span class="value">${selectedLedgerStudent.name}</span></div>
+                                <div class="info-item"><span class="label">Student ID</span><span class="value">${selectedLedgerStudent.studentId}</span></div>
+                                <div class="info-item"><span class="label">Class & Section</span><span class="value">${selectedLedgerStudent.class} - ${selectedLedgerStudent.section}</span></div>
+                                <div class="info-item"><span class="label">Session</span><span class="value">${selectedLedgerSession}</span></div>
+                              </div>
+                              <table>
+                                ${ledgerContent.innerHTML}
+                              </table>
+                              <div class="footer">
+                                <p>This is a computer generated ledger report.</p>
+                                <p>Date: ${new Date().toLocaleString()}</p>
+                              </div>
+                              <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }</script>
+                            </body>
+                          </html>
+                        `);
+                        printWindow.document.close();
+                      }}
+                      className="btn-secondary flex items-center gap-2 py-3 px-6"
+                    >
+                      <Printer size={18} /> Print Ledger
+                    </button>
+                    <button onClick={handleExportXLS} className="btn-secondary flex items-center gap-2 py-3 px-6">
+                      <Download size={18} /> Export CSV
+                    </button>
+                  </div>
             </div>
           </Card>
 
@@ -640,7 +704,7 @@ export const FeeManagement = ({
                 <h3 className="text-xl font-black text-text-heading uppercase mb-8 flex items-center gap-3">
                   <BookOpen className="text-primary" /> Transaction History ({selectedLedgerSession})
                 </h3>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" id="student-ledger-table">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="border-b border-slate-100">

@@ -7,7 +7,8 @@ import {
   X,
   Edit2,
   Trash2,
-  Save
+  Save,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../components/common/Card';
@@ -61,6 +62,9 @@ export const FrontOfficePanel = ({
     date: new Date().toISOString().split('T')[0],
     status: 'Pending'
   });
+
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [printData, setPrintData] = useState<any>(null);
 
   // Fetch data from Supabase
   useEffect(() => {
@@ -276,20 +280,212 @@ export const FrontOfficePanel = ({
     setView('register-student');
   };
 
+  const handlePrintSlip = (data: any, type: 'enquiry' | 'visitor') => {
+    setPrintData({ ...data, type });
+    setIsPrinting(true);
+    
+    // Use a timeout to ensure the print section is rendered
+    setTimeout(() => {
+      const printWindow = window.open('', '_blank', 'width=600,height=800');
+      if (!printWindow) return;
+
+      const content = document.getElementById('print-slip-content');
+      if (!content) return;
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Slip</title>
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+              body { 
+                font-family: 'Inter', sans-serif; 
+                margin: 0; 
+                padding: 10mm;
+                line-height: 1.5;
+              }
+              .slip-container {
+                border: 2px solid #e2e8f0;
+                padding: 20px;
+                border-radius: 12px;
+                max-width: 100%;
+              }
+              .header {
+                text-align: center;
+                border-bottom: 2px solid #f1f5f9;
+                padding-bottom: 15px;
+                margin-bottom: 20px;
+              }
+              .title {
+                font-size: 20px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: #0f172a;
+              }
+              .type-tag {
+                display: inline-block;
+                padding: 4px 12px;
+                background: #f1f5f9;
+                border-radius: 99px;
+                font-size: 10px;
+                font-weight: 800;
+                color: #64748b;
+                margin-top: 5px;
+                text-transform: uppercase;
+              }
+              .info-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                font-size: 14px;
+              }
+              .label {
+                font-weight: 700;
+                color: #64748b;
+              }
+              .value {
+                font-weight: 500;
+                color: #0f172a;
+              }
+              .section-title {
+                font-size: 12px;
+                font-weight: 800;
+                color: #64748b;
+                text-transform: uppercase;
+                margin: 20px 0 10px;
+                border-bottom: 1px solid #f1f5f9;
+                padding-bottom: 5px;
+              }
+              .footer {
+                margin-top: 30px;
+                text-align: center;
+                font-size: 10px;
+                color: #94a3b8;
+                border-top: 1px dashed #e2e8f0;
+                padding-top: 15px;
+              }
+              @media print {
+                body { padding: 0; }
+                .slip-container { border: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${content.innerHTML}
+            <script>
+              window.onload = () => {
+                window.print();
+                window.onafterprint = () => window.close();
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      setIsPrinting(false);
+      setPrintData(null);
+    }, 100);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Hidden Print Content */}
+      <div id="print-slip-content" className="hidden">
+        {printData && (
+          <div className="slip-container">
+            <div className="header">
+              <div className="title">School Name</div>
+              <div className="type-tag">{printData.type} Slip</div>
+            </div>
+            
+            <div className="section-title">General Information</div>
+            <div className="info-row">
+              <span className="label">Date:</span>
+              <span className="value">{printData.date}</span>
+            </div>
+            <div className="info-row">
+              <span className="label">Name:</span>
+              <span className="value">{printData.name || printData.complainantName || printData.visitor_name} {printData.surname || ''}</span>
+            </div>
+            <div className="info-row">
+              <span className="label">Mobile:</span>
+              <span className="value">{printData.mobile}</span>
+            </div>
+
+            {printData.type === 'enquiry' && (
+              <>
+                <div className="section-title">Enquiry Details</div>
+                <div className="info-row">
+                  <span className="label">Class:</span>
+                  <span className="value">{printData.class}</span>
+                </div>
+                <div className="info-row">
+                   <span className="label">Father Name:</span>
+                   <span className="value">{printData.fatherName}</span>
+                </div>
+                {printData.address && (
+                  <div className="info-row">
+                    <span className="label">Address:</span>
+                    <span className="value">{printData.address}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {printData.type === 'visitor' && (
+              <>
+                <div className="section-title">Visit Details</div>
+                <div className="info-row">
+                  <span className="label">Purpose:</span>
+                  <span className="value">{printData.purpose}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">Time IN:</span>
+                  <span className="value">{printData.inTime}</span>
+                </div>
+                {printData.outTime && (
+                  <div className="info-row">
+                    <span className="label">Time OUT:</span>
+                    <span className="value">{printData.outTime}</span>
+                  </div>
+                )}
+              </>
+            )}
+            
+            <div className="footer">
+              <p>Generated by School Management System</p>
+              <p>${new Date().toLocaleString()}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-black text-text-heading">Front Office</h2>
-        <button 
-          onClick={() => {
-            setEditingEnquiry(null);
-            setNewEnquiry({ status: 'Pending', date: new Date().toISOString().split('T')[0] });
-            setShowAddEnquiry(true);
-          }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} /> New Enquiry
-        </button>
+        <div className="flex gap-4">
+          <div className="bg-white px-6 py-2 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-text-sub uppercase tracking-widest">Total Enquiries</span>
+              <span className="text-xl font-black text-primary">{enquiries.length}</span>
+            </div>
+            <div className="w-px h-8 bg-slate-100"></div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-text-sub uppercase tracking-widest">Visitors Today</span>
+              <span className="text-xl font-black text-orange-600">{visitors.filter(v => v.date === new Date().toISOString().split('T')[0]).length}</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => {
+              setEditingEnquiry(null);
+              setNewEnquiry({ status: 'Pending', date: new Date().toISOString().split('T')[0] });
+              setShowAddEnquiry(true);
+            }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} /> New Enquiry
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 border-b border-slate-200 overflow-x-auto pb-px">
@@ -353,6 +549,13 @@ export const FrontOfficePanel = ({
                             Approve
                           </button>
                         )}
+                        <button 
+                          onClick={() => handlePrintSlip(e, 'enquiry')}
+                          className="p-2 hover:bg-slate-100 rounded-lg text-text-sub transition-colors"
+                          title="Print Enquiry Slip"
+                        >
+                          <Printer size={14} />
+                        </button>
                         <button 
                           onClick={() => {
                             setEditingEnquiry(e);
@@ -462,6 +665,13 @@ export const FrontOfficePanel = ({
                               Mark Out
                             </button>
                           )}
+                          <button 
+                            onClick={() => handlePrintSlip(v, 'visitor')}
+                            className="p-2 hover:bg-slate-100 rounded-lg text-text-sub transition-colors"
+                            title="Print Visitor Pass"
+                          >
+                            <Printer size={14} />
+                          </button>
                           <button 
                             onClick={() => {
                               setEditingVisitor(v);

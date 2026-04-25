@@ -262,6 +262,7 @@ export interface Staff {
   qualification?: string;
   experience?: string;
   address?: string;
+  bloodGroup?: string;
   photo?: string;
   joiningDate: string;
   status: 'Active' | 'Inactive';

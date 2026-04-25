@@ -437,6 +437,7 @@ interface Staff {
   qualification?: string;
   experience?: string;
   address?: string;
+  bloodGroup?: string;
   photo?: string;
   joiningDate: string;
   dob?: string;
@@ -7008,7 +7009,7 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
            <div 
              ref={receiptRef}
              className={`bg-white shadow-lg font-mono text-slate-800 transition-all duration-300 ${
-               printSize === '58mm' ? 'w-[220px] p-2 text-[10px]' : 'w-[560px] p-8 text-sm'
+               printSize === '58mm' ? 'w-[210px] p-1.5 text-[9px]' : 'w-[560px] p-8 text-sm'
              }`}
              id="printable-receipt"
            >
@@ -7025,7 +7026,7 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
                    right: 0 !important;
                    top: 0 !important;
                    margin: 0 !important;
-                   padding: ${printSize === '58mm' ? '0' : '10mm'} !important;
+                   padding: ${printSize === '58mm' ? '0' : '8mm'} !important;
                    width: ${printSize === '58mm' ? '58mm' : 'auto'} !important;
                    min-width: ${printSize === '58mm' ? '0' : '560px'} !important;
                    box-shadow: none !important;
@@ -7035,17 +7036,17 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
                  .no-print { display: none !important; }
                }
                .receipt-frame {
-                 border: 2px solid black;
-                 padding: 10px;
+                 border: 1.5px solid black;
+                 padding: ${printSize === '58mm' ? '4px' : '10px'};
                  position: relative;
-                 margin: 0 auto 15px;
+                 margin: 0 auto ${printSize === '58mm' ? '6px' : '15px'};
                  width: fit-content;
                  border-radius: 40% 10% 40% 10% / 10% 40% 10% 40%;
                }
                .script-font {
                  font-family: 'Petit Formal Script', cursive;
-                 font-size: ${printSize === '58mm' ? '12px' : '18px'};
-                 line-height: 1.2;
+                 font-size: ${printSize === '58mm' ? '11px' : '18px'};
+                 line-height: 1.1;
                }
                .bold-mono {
                  font-family: 'Space Mono', monospace;
@@ -7061,14 +7062,14 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
              <div className="text-center mb-6 pt-4 text-black">
                <div className="receipt-frame">
                   <div className="script-font font-bold">{schoolProfile.name}</div>
-                  <div className="script-font" style={{ fontSize: printSize === '58mm' ? '9px' : '13px' }}>
+                  <div className="script-font" style={{ fontSize: printSize === '58mm' ? '8px' : '13px' }}>
                     {schoolProfile.address?.split(',')[0]}
                   </div>
                </div>
                
-               <h1 className={`${printSize === '58mm' ? 'text-sm' : 'text-xl'} bold-mono uppercase`}>{schoolProfile.name}</h1>
+               <h1 className={`${printSize === '58mm' ? 'text-[11px]' : 'text-xl'} bold-mono uppercase`}>{schoolProfile.name}</h1>
                
-                <div className="condensed font-bold mt-1 space-y-0.5" style={{ fontSize: printSize === '58mm' ? '9px' : '12px' }}>
+                <div className="condensed font-bold mt-1 space-y-0.5" style={{ fontSize: printSize === '58mm' ? '8px' : '12px' }}>
                   <p className="uppercase">{schoolProfile.address}</p>
                   <p className="uppercase">STATE: {schoolProfile.state} {schoolProfile.contact && ` | PH.NO.: ${schoolProfile.contact}`}</p>
                   <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5">
@@ -7221,7 +7222,8 @@ const TeacherPanel = ({
   setView,
   schoolProfile,
   supabase,
-  setSelectedStudentQR
+  setSelectedStudentQR,
+  staffAttendance
 }: any) => {
   const assignedClasses = (teacherAssignments || []).filter((a: any) => {
     const teacherName = currentUser?.name?.toLowerCase();
@@ -10344,9 +10346,12 @@ const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelA
   );
 };
 
-const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, designations, setDesignations, leaveRequests, setLeaveRequests, users, setUsers, masterData, setMasterData }: any) => {
+const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, designations, setDesignations, leaveRequests, setLeaveRequests, users, setUsers, masterData, setMasterData, currentUser }: any) => {
   const [activeTab, setActiveTab] = useState('staff-list');
   const [showAddStaff, setShowAddStaff] = useState(false);
+  const [showBulkStaffModal, setShowBulkStaffModal] = useState(false);
+  const [bulkStaffInput, setBulkStaffInput] = useState('');
+
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [viewStaff, setViewStaff] = useState<Staff | null>(null);
   const [newStaff, setNewStaff] = useState<Partial<Staff>>({
@@ -10407,6 +10412,7 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
         qualification: newStaff.qualification,
         experience: newStaff.experience,
         residential_address: newStaff.address,
+        blood_group: newStaff.bloodGroup,
         date_of_birth: newStaff.dob,
         status: newStaff.status,
         joining_date: newStaff.joiningDate,
@@ -10432,6 +10438,10 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
             if (missingCols.has(key)) delete currentPayload[key];
           });
 
+          if (Object.keys(currentPayload).length === 0) {
+            throw new Error("No valid columns remain in payload to save.");
+          }
+
           try {
             const request = isUpdate 
               ? supabase.from('staff').update(currentPayload).eq('staff_id', staffId)
@@ -10440,18 +10450,18 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
             const { data, error } = await (isUpdate ? request.select() : request.select());
 
             if (error) {
+              const errorMsg = error.message.toLowerCase();
               // Handle schema cache issues (missing columns)
-              if (error.code === 'PGRST204' || error.message.toLowerCase().includes('column') || error.message.toLowerCase().includes('schema cache')) {
+              if (error.code === 'PGRST204' || errorMsg.includes('column') || errorMsg.includes('schema cache')) {
                 const match = error.message.match(/column ['"](.*?)['"]/i) || 
-                             error.message.match(/['"](.*?)['"] column/i) ||
-                             error.message.match(/column (.*?) /i);
+                             error.message.match(/['"](.*?)['"] column/i);
                 
                 let missingColumn = match ? match[1] : null;
 
                 if (!missingColumn) {
                   const commonCols = ['documents', 'photo', 'emergency_contact', 'father_name', 'mother_name', 'qualification', 'experience', 'residential_address', 'date_of_birth', 'joining_date', 'login_id', 'login_password', 'status', 'staff_id'];
                   for (const col of commonCols) {
-                    if (error.message.toLowerCase().includes(col.toLowerCase())) {
+                    if (errorMsg.includes(col.toLowerCase())) {
                       missingColumn = col;
                       break;
                     }
@@ -10465,10 +10475,18 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
                   attempt++;
                   continue;
                 }
+                
+                // If it's a general cache issue but we couldn't identify the column
+                console.warn('General schema cache issue detected, attempting to reload...');
+                try {
+                   await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+                } catch (e) {}
+                await new Promise(r => setTimeout(r, 1000));
+                attempt++;
+                continue;
               }
               
               // Handle size/network errors
-              const errorMsg = error.message.toLowerCase();
               if (errorMsg.includes('failed to fetch') || errorMsg.includes('network') || errorMsg.includes('too large') || errorMsg.includes('payload')) {
                 if (currentPayload.documents && currentPayload.documents.length > 0) {
                   console.warn("Payload potentially too large. Reducing documents...");
@@ -10500,9 +10518,18 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
           } catch (err: any) {
             console.error(`Save attempt ${attempt + 1} failed:`, err);
             const errorMsg = err.message?.toLowerCase() || '';
+            const isSchemaError = errorMsg.includes('schema cache') || errorMsg.includes('pgrst204') || errorMsg.includes('column');
             const isFetchError = err instanceof TypeError || errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('too large');
             
-            if (isFetchError) {
+            if (isSchemaError) {
+              console.warn('Schema cache issue detected in staff save, attempting to reload...');
+              try {
+                await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+              } catch (rpcErr) {
+                console.warn('Silent RPC error during reload:', rpcErr);
+              }
+              await new Promise(r => setTimeout(r, 1000));
+            } else if (isFetchError) {
               if (currentPayload.documents && currentPayload.documents.length > 0) {
                  currentPayload.documents = []; 
                  attempt++;
@@ -10676,6 +10703,12 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-black text-text-heading">Human Resource</h2>
         <div className="flex gap-2">
+          <button 
+            onClick={() => setShowBulkStaffModal(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs uppercase tracking-widest text-text-secondary"
+          >
+            <Upload size={18} /> Bulk Upload
+          </button>
           <button 
             onClick={() => {
               setEditingStaff(null);
@@ -11297,6 +11330,12 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
                         value={newStaff.gender} 
                         onChange={(e: any) => setNewStaff({...newStaff, gender: e.target.value})} 
                       />
+                      <Select 
+                        label="Blood Group" 
+                        options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} 
+                        value={newStaff.bloodGroup} 
+                        onChange={(e: any) => setNewStaff({...newStaff, bloodGroup: e.target.value})} 
+                      />
                     </div>
                   </div>
 
@@ -11455,6 +11494,143 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
           </div>
         )}
       </AnimatePresence>
+
+      {showBulkStaffModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-16 -mt-16"></div>
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <div>
+                <h3 className="text-2xl font-black text-text-heading">Bulk Staff Import</h3>
+                <p className="text-sm text-text-sub font-medium">Add multiple staff members at once.</p>
+              </div>
+              <button onClick={() => setShowBulkStaffModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
+              <div>
+                <label className="label-text">JSON Data (Paste list of staff objects)</label>
+                <textarea 
+                  className="input-field min-h-[200px] font-mono text-[10px]" 
+                  placeholder='[{"name": "John", "surname": "Doe", ...}]'
+                  value={bulkStaffInput}
+                  onChange={(e) => setBulkStaffInput(e.target.value)}
+                />
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl flex flex-col gap-3">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Quick Templates</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => setBulkStaffInput(JSON.stringify([
+                      { name: "Nagen", surname: "Debbarma", designation: "Ast. Teacher", dob: "1989-05-15", fatherName: "Sunil Debbarma", motherName: "Biswa Rani Debbarma", mobile: "8837492783", address: "Bahadur Sardar Para, P.O - Khasiamangal, P.S - T", bloodGroup: "B+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Ramporsat", surname: "Molsom", designation: "Ast. Teacher", dob: "2003-05-05", fatherName: "Lt. Paikhulal Molsom", motherName: "Kartikmonti Molsom", mobile: "6009924460", address: "Sonkhola, P.O + P.S - Taidu, Dist. - Gomati Tripura", bloodGroup: "O+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Ranjita", surname: "Jamatia", designation: "Ast. Teacher", dob: "2003-03-02", fatherName: "Lt. Dulal Nanda Jamatia", motherName: "Mahi Mala Jamatia", mobile: "8787671686", address: "Garjuntali, P.O - Hadrai, P.S - Teliamura, Dist. - Kh", bloodGroup: "A+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Lalrindika", surname: "", designation: "Ast. Teacher", dob: "1995-03-08", fatherName: "Zonunthara", motherName: "VI Hruaii", mobile: "9366556971", address: "Vanghmun P.O - Jampui, P.S - Vanghmun, Dist. Nc", bloodGroup: "AB+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Suman", surname: "Singha Roy", designation: "Ast. Teacher", dob: "2000-02-26", fatherName: "Swapan Singha Roy", motherName: "Sankari Singha Roy", mobile: "9366198546", address: "Maiganga, P.O - Maiganga, P.S - Teliamura, Dist.-", bloodGroup: "O+", status: "Active", joiningDate: "2026-04-20" }
+                    ], null, 2))}
+                    className="text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-primary/50 transition-all text-[10px] font-bold flex items-center justify-between group"
+                  >
+                    <span>Load First Set (5 Staff)</span>
+                    <Plus size={12} className="text-slate-300 group-hover:text-primary transition-all" />
+                  </button>
+                  <button 
+                    onClick={() => setBulkStaffInput(JSON.stringify([
+                      { name: "Mina", surname: "Kaipeng", designation: "Ast. Teacher", dob: "2006-11-25", fatherName: "Philip Kumar Kaipeng", motherName: "Mondirdhan Kaipeng", mobile: "9366344435", address: "Gondaek P.O - Taidu, P.S - Taidu, Dist. - Gomati, T", bloodGroup: "O+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Projit", surname: "Jamatia", designation: "Ast. Teacher", dob: "1998-01-06", fatherName: "Bholanando Jamatia", motherName: "Sandhya Rani Jamatia", mobile: "6300972735", address: "Bahadur Sardar Para, P.O - Khasiamangal, P.S - T", bloodGroup: "B+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Amrita", surname: "Debbarma", designation: "Ast. Teacher", dob: "1983-03-03", fatherName: "Rabindra Debbarma", motherName: "Sachi Rani Debbarma", mobile: "9366946653", address: "Guru Charan Para, P.O - Khasiamangal, P.S - Teli", bloodGroup: "O+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Bhabatosh", surname: "Sarkar", designation: "Ast. Teacher", dob: "1999-03-23", fatherName: "Nripendra Ch. Sarkar", motherName: "Kanchan Sarkar", mobile: "7005526679", address: "Gamai Bari, P.O - Brahmachara, P.S - Teliamura - D", bloodGroup: "B+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Nehemia", surname: "Bongcher", designation: "Ast. Teacher", dob: "2002-03-25", fatherName: "Ramfangzauva Bongcher", motherName: "Sonati Bongcher", mobile: "9383256172", address: "Nelsi Para, Ompi Nagar, Gomati Tripura", bloodGroup: "B+", status: "Active", joiningDate: "2026-04-20" },
+                      { name: "Nilima", surname: "Reang", designation: "Ast. Teacher", dob: "2000-09-02", fatherName: "Harendra Reang", motherName: "Horonbati Reang", mobile: "6009157038", address: "Mashurai Para, Kulai, Dhalai Tripura 799289", bloodGroup: "B+", status: "Active", joiningDate: "2026-04-20" }
+                    ], null, 2))}
+                    className="text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-primary/50 transition-all text-[10px] font-bold flex items-center justify-between group"
+                  >
+                    <span>Load Second Set (6 Staff)</span>
+                    <Plus size={12} className="text-slate-300 group-hover:text-primary transition-all" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6 shrink-0">
+              <button 
+                onClick={() => setShowBulkStaffModal(false)}
+                className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all uppercase tracking-widest text-xs"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const data = JSON.parse(bulkStaffInput);
+                    if (!Array.isArray(data)) throw new Error('Data must be an array');
+                    
+                    let successCount = 0;
+                    for (const s of data) {
+                      const staffPayload = {
+                        name: s.name,
+                        surname: s.surname || '',
+                        email: s.email || (`${s.name.toLowerCase()}${Math.floor(Math.random()*1000)}@school.com`),
+                        mobile: s.mobile || '',
+                        role: s.role || 'Teacher',
+                        department: s.department || 'Academic',
+                        designation: s.designation || 'Ast. Teacher',
+                        qualification: s.qualification || '',
+                        experience: s.experience || '',
+                        residential_address: s.address || '',
+                        blood_group: s.bloodGroup || '',
+                        date_of_birth: s.dob || '',
+                        status: s.status || 'Active',
+                        joining_date: s.joiningDate || new Date().toISOString().split('T')[0],
+                        staff_id: `STF-${Math.floor(100000 + Math.random() * 900000)}`
+                      };
+
+                      if (supabase) {
+                        const { error } = await supabase.from('staff').insert([staffPayload]);
+                        if (!error) successCount++;
+                      } else {
+                        setStaff((prev: any) => [...prev, { ...staffPayload, id: Math.random().toString(36).substr(2, 9) }]);
+                        successCount++;
+                      }
+                    }
+
+                    alert(`Successfully imported ${successCount} staff members.`);
+                    setShowBulkStaffModal(false);
+                    setBulkStaffInput('');
+                    
+                    if (supabase) {
+                      const { data: refreshedStaff } = await supabase.from('staff').select('*');
+                      if (refreshedStaff) setStaff(refreshedStaff.map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        surname: s.surname,
+                        role: s.role,
+                        status: s.status,
+                        staffId: s.staff_id,
+                        email: s.email,
+                        mobile: s.mobile,
+                        joiningDate: s.joining_date,
+                        address: s.residential_address,
+                        dob: s.date_of_birth,
+                        bloodGroup: s.blood_group,
+                        department: s.department,
+                        designation: s.designation
+                      })));
+                    }
+                  } catch (err) {
+                    alert('Invalid JSON data or error during import.');
+                  }
+                }}
+                className="flex-1 btn-primary py-4 shadow-xl shadow-primary/20 uppercase tracking-widest text-xs"
+              >
+                Process Import
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <AnimatePresence>
         {viewStaff && (
@@ -13717,12 +13893,14 @@ export default function App() {
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS department TEXT;
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS designation TEXT;
+          ALTER TABLE staff ADD COLUMN IF NOT EXISTS blood_group TEXT;
         `;
 
         const hostelMigrations = `
           -- Hostel Rooms Table
           CREATE TABLE IF NOT EXISTS hostel_rooms (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            hostel_name TEXT,
             room_number TEXT UNIQUE,
             floor TEXT,
             capacity INTEGER DEFAULT 4,
@@ -13769,9 +13947,19 @@ export default function App() {
           );
 
           -- Ensure columns exist for legacy tables
-          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS category TEXT;
-          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS price_per_month NUMERIC DEFAULT 0;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS hostel_name TEXT;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_no TEXT;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_number TEXT;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS floor TEXT;
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT 4;
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_type TEXT DEFAULT 'Non-AC';
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS gender TEXT DEFAULT 'Male';
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Standard';
+          ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS price_per_month NUMERIC DEFAULT 0;
+          
+          -- Sync legacy room_no with room_number if one is missing
+          UPDATE hostel_rooms SET room_number = room_no WHERE room_number IS NULL AND room_no IS NOT NULL;
+          UPDATE hostel_rooms SET room_no = room_number WHERE room_no IS NULL AND room_number IS NOT NULL;
           
           -- Trigger schema cache reload
           NOTIFY pgrst, 'reload schema';
@@ -14169,6 +14357,8 @@ const schoolMigrations = `
   }, [supabase]);
 
   const [view, setView] = useState<View>('login');
+  const [showBulkStudentModal, setShowBulkStudentModal] = useState(false);
+  const [bulkStudentInput, setBulkStudentInput] = useState('');
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
@@ -14618,8 +14808,8 @@ const schoolMigrations = `
 
       // Calculate Balances
       if (feeData && cEntries) {
-        let bBal = 1250000; // Initial hardcoded bank balance
-        let cBal = 45000;   // Initial hardcoded cash balance
+        let bBal = 0; // Initial hardcoded bank balance
+        let cBal = 0;   // Initial hardcoded cash balance
 
         feeData.forEach((t: any) => {
           if (t.payment_mode === 'Cash') {
@@ -14888,6 +15078,7 @@ const schoolMigrations = `
       const { data: hRooms } = await supabase.from('hostel_rooms').select('*');
       if (hRooms) setHostelRooms(hRooms.map(hr => ({
         id: hr.id,
+        hostelName: hr.hostel_name,
         roomNumber: hr.room_number,
         floor: hr.floor,
         category: hr.category,
@@ -14954,6 +15145,30 @@ const schoolMigrations = `
   const [cashBalance, setCashBalance] = useState(0);
   const [contraEntries, setContraEntries] = useState<any[]>([]);
   const [adjustmentLogs, setAdjustmentLogs] = useState<any[]>([]);
+
+  const resetAccountingBalances = async () => {
+    if (!confirm('WARNING: This will delete ALL fee collections and contra entries, effectively resetting your Bank and Cash balances to ZERO. This action is IRREVERSIBLE. Are you sure you want to proceed?')) {
+      return;
+    }
+
+    if (supabase) {
+      try {
+        const { error: err1 } = await supabase.rpc('exec_sql', { sql_query: "DELETE FROM fee_collections;" });
+        if (err1) throw err1;
+        const { error: err2 } = await supabase.rpc('exec_sql', { sql_query: "DELETE FROM contra_entries;" });
+        if (err2) throw err2;
+        alert('Accounting data reset successfully! Balances are now zero.');
+        fetchAllData();
+      } catch (err) {
+        console.error('Error resetting financials:', err);
+        alert('Failed to reset financials: ' + (err as any).message);
+      }
+    } else {
+      setFeeTransactions([]);
+      setContraEntries([]);
+      alert('Local accounting data reset!');
+    }
+  };
   
   // Academics State
   const [timeTables, setTimeTables] = useState<ClassTimeTable[]>([]);
@@ -15247,12 +15462,16 @@ const schoolMigrations = `
     }
 
     // Admin Check (Robust fallback)
-    if (id === 'admin' && loginPassword === '12345') {
-      setLoginError('');
-      const adminUser = users.find(u => u.id === 'admin') || { id: 'admin', name: 'Administrator', role: 'admin', permissions: ['all'], password: '12345' };
-      setCurrentUser(adminUser);
-      setView('dashboard');
-      return;
+    if (id === 'admin') {
+      const adminUser = users.find(u => u.id === 'admin');
+      const requiredPassword = adminUser?.password || 'smcs@josdhoa@12345';
+      
+      if (loginPassword === requiredPassword) {
+        setLoginError('');
+        setCurrentUser(adminUser || { id: 'admin', name: 'Administrator', role: 'admin', permissions: ['all'], password: 'smcs@josdhoa@12345' });
+        setView('dashboard');
+        return;
+      }
     }
 
     // Accountant Check
@@ -15949,7 +16168,7 @@ const schoolMigrations = `
                 onClick={() => setView('class-360')} 
                 isSidebarOpen={isSidebarOpen}
               />
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
                 <SidebarItem 
                   icon={Building2} 
                   label={isSidebarOpen ? "Front Office" : ""} 
@@ -15958,7 +16177,7 @@ const schoolMigrations = `
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
                 <SidebarItem 
                   icon={UserPlus} 
                   label={isSidebarOpen ? "Register Student" : ""} 
@@ -15972,7 +16191,7 @@ const schoolMigrations = `
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
                 <SidebarItem 
                   icon={Users} 
                   label={isSidebarOpen ? "Student List" : ""} 
@@ -15981,7 +16200,7 @@ const schoolMigrations = `
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
                 <SidebarItem 
                   icon={CalendarRange} 
                   label={isSidebarOpen ? "Leave Management" : ""} 
@@ -15990,7 +16209,7 @@ const schoolMigrations = `
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'accountant') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'accountant' || currentUser?.role === 'staff') && (
                 <>
                   <SidebarItem 
                     icon={Receipt} 
@@ -16006,7 +16225,7 @@ const schoolMigrations = `
                     onClick={() => setView('due-fees')} 
                     isSidebarOpen={isSidebarOpen}
                   />
-                  {(currentUser?.role !== 'accountant') && (
+                  {(currentUser?.role !== 'accountant' && currentUser?.role !== 'staff') && (
                     <SidebarItem 
                       icon={UserCog} 
                       label={isSidebarOpen ? "Human Resource" : ""} 
@@ -16026,7 +16245,7 @@ const schoolMigrations = `
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
                 <SidebarItem 
                   icon={MessageCircle} 
                   label={isSidebarOpen ? "Communication" : ""} 
@@ -16035,7 +16254,7 @@ const schoolMigrations = `
                   isSidebarOpen={isSidebarOpen}
                 />
               )}
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+              {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
                 <SidebarItem 
                   icon={Coins} 
                   label={isSidebarOpen ? "Income & Expense" : ""} 
@@ -16080,7 +16299,7 @@ const schoolMigrations = `
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
             <SidebarItem 
               icon={BookOpen} 
               label={isSidebarOpen ? "Academics" : ""} 
@@ -16098,7 +16317,7 @@ const schoolMigrations = `
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
             <SidebarItem 
               icon={ClipboardList} 
               label={isSidebarOpen ? "Examination" : ""} 
@@ -16107,7 +16326,7 @@ const schoolMigrations = `
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
             <>
               <SidebarItem 
                 icon={UserPlus} 
@@ -16118,7 +16337,7 @@ const schoolMigrations = `
               />
             </>
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'warden') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'warden' || currentUser?.role === 'staff') && (
             <SidebarItem 
               icon={Home} 
               label={isSidebarOpen ? "Hostel" : ""} 
@@ -16127,7 +16346,7 @@ const schoolMigrations = `
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'staff') && (
             <>
               <SidebarItem 
                 icon={Calendar} 
@@ -16138,7 +16357,7 @@ const schoolMigrations = `
               />
             </>
           )}
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'accountant') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'super-admin' || currentUser?.role === 'accountant' || currentUser?.role === 'staff') && (
             <SidebarItem 
               icon={BarChart3} 
               label={isSidebarOpen ? "Reports" : ""} 
@@ -17105,6 +17324,13 @@ const schoolMigrations = `
                   </div>
                   <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
                     <button 
+                      onClick={() => setShowBulkStudentModal(true)}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all flex items-center justify-center gap-2 text-text-secondary"
+                    >
+                      <Upload size={18} />
+                      Bulk Import
+                    </button>
+                    <button 
                       onClick={() => {
                         const ws = XLSX.utils.json_to_sheet(students);
                         const wb = XLSX.utils.book_new();
@@ -17430,6 +17656,7 @@ const schoolMigrations = `
                   schoolProfile={schoolProfile}
                   supabase={supabase}
                   setSelectedStudentQR={setSelectedStudentQR}
+                  staffAttendance={staffAttendance}
                 />
               </motion.div>
             )}
@@ -17470,6 +17697,7 @@ const schoolMigrations = `
                   setUsers={setUsers}
                   masterData={masterData}
                   setMasterData={setMasterData}
+                  currentUser={currentUser}
                 />
               </motion.div>
             )}
@@ -18452,6 +18680,148 @@ const schoolMigrations = `
 
       {/* Student QR Code Modal */}
       <AnimatePresence>
+        {showBulkStudentModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-16 -mt-16"></div>
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <div>
+                <h3 className="text-2xl font-black text-text-heading">Bulk Student Import</h3>
+                <p className="text-sm text-text-sub font-medium">Add multiple students using JSON format.</p>
+              </div>
+              <button onClick={() => setShowBulkStudentModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
+              <div>
+                <label className="label-text">JSON Data (Paste list of student objects)</label>
+                <textarea 
+                  className="input-field min-h-[300px] font-mono text-[10px]" 
+                  placeholder='[{"Name": "Kevin Molsom", "student type": "OLD", "Class / Section": "2", "SECTION": "A", "ROLL NO": 1, ...}]'
+                  value={bulkStudentInput}
+                  onChange={(e) => setBulkStudentInput(e.target.value)}
+                />
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl flex flex-col gap-3">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Import Template</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <button 
+                    onClick={() => setBulkStudentInput(JSON.stringify([
+                      { "student type": "OLD", "Name": "Kevin Molsom", "Class / Section": "2", "SECTION": "A", "ROLL NO": 1, "D.O.B": "20/11/2018", "Father Name": "Ramesh Hari Molsom", "Mother Name": "Ramengi Molsom", "FATHERS PHONE No.": "9366556971", "Blood Group": "A+", "Address": "Chinta Kumar Para, P.O - Khasiamangal, P.S - Teliamura, Dist. - Khowai Tripura - 799205" },
+                      { "student type": "OLD", "Name": "Samuel Debbarma", "Class / Section": "2", "SECTION": "A", "ROLL NO": 2, "D.O.B": "19/06/2018", "Father Name": "Mrinal Debbarma", "Mother Name": "Sambhu Laxmi Debbarma", "FATHERS PHONE No.": "8787804909", "Blood Group": "B+", "Address": "Bahadur Sardar Para, P.O - Khasiamangal, P.S - Teliamura, Dist. - Khowai Tripura - 799205" }
+                    ], null, 2))}
+                    className="text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-primary/50 transition-all text-[10px] font-bold flex items-center justify-between group"
+                  >
+                    <span>Load Sample Data (Matching Image Columns)</span>
+                    <Plus size={12} className="text-slate-300 group-hover:text-primary transition-all" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6 shrink-0">
+              <button 
+                onClick={() => setShowBulkStudentModal(false)}
+                className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all uppercase tracking-widest text-xs"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const data = JSON.parse(bulkStudentInput);
+                    if (!Array.isArray(data)) throw new Error('Data must be an array');
+                    
+                    let successCount = 0;
+                    for (const s of data) {
+                      const studentPayload = {
+                        first_name: s.Name || s.name || '',
+                        surname: '',
+                        student_type: s["student type"] || s.studentType || 'OLD',
+                        academic_session: schoolProfile.currentSession || '2023-24',
+                        class_name: s["Class / Section"] || s.class || '',
+                        section_name: s["SECTION"] || s.section || '',
+                        roll_number: s["ROLL NO"] || s.rollNumber || '',
+                        date_of_birth: s["D.O.B"] || s.dob || '',
+                        father_name: s["Father Name"] || s.fatherName || '',
+                        mother_name: s["Mother Name"] || s.motherName || '',
+                        father_mobile: s["FATHERS PHONE No."] || s.fatherMobile || '',
+                        blood_group: s["Blood Group"] || s.bloodGroup || '',
+                        residential_address: s["Address"] || s.address || '',
+                        student_id: `STD-${Math.floor(100000 + Math.random() * 900000)}`,
+                        admission_date: new Date().toISOString().split('T')[0]
+                      };
+
+                      if (supabase) {
+                        const { error } = await supabase.from('students').insert([studentPayload]);
+                        if (!error) successCount++;
+                      } else {
+                        setStudents((prev: any) => [...prev, {
+                          id: Math.random().toString(36).substr(2, 9),
+                          studentId: studentPayload.student_id,
+                          name: studentPayload.first_name,
+                          surname: studentPayload.surname,
+                          studentType: studentPayload.student_type,
+                          session: studentPayload.academic_session,
+                          class: studentPayload.class_name,
+                          section: studentPayload.section_name,
+                          rollNumber: studentPayload.roll_number,
+                          dob: studentPayload.date_of_birth,
+                          fatherName: studentPayload.father_name,
+                          motherName: studentPayload.mother_name,
+                          fatherMobile: studentPayload.father_mobile,
+                          bloodGroup: studentPayload.blood_group,
+                          address: studentPayload.residential_address,
+                          admissionDate: studentPayload.admission_date
+                        }]);
+                        successCount++;
+                      }
+                    }
+
+                    alert(`Successfully imported ${successCount} students.`);
+                    setShowBulkStudentModal(false);
+                    setBulkStudentInput('');
+                    
+                    if (supabase) {
+                      const { data: studentsData } = await supabase.from('students').select('*');
+                      if (studentsData) {
+                        setStudents(studentsData.map((s: any) => ({
+                          id: s.id,
+                          studentId: s.student_id,
+                          name: s.first_name,
+                          surname: s.surname,
+                          studentType: s.student_type,
+                          class: s.class_name,
+                          section: s.section_name,
+                          rollNumber: s.roll_number,
+                          dob: s.date_of_birth,
+                          fatherName: s.father_name,
+                          motherName: s.mother_name,
+                          fatherMobile: s.father_mobile,
+                          bloodGroup: s.blood_group,
+                          address: s.residential_address,
+                          admissionDate: s.admission_date
+                        })));
+                      }
+                    }
+                  } catch (err) {
+                    alert('Invalid JSON data or error during import.');
+                  }
+                }}
+                className="flex-1 btn-primary py-4 shadow-xl shadow-primary/20 uppercase tracking-widest text-xs"
+              >
+                Process Student Import
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {selectedStudentQR && (
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
             <motion.div 
@@ -18511,6 +18881,146 @@ const schoolMigrations = `
           </div>
         )}
       </AnimatePresence>
+
+      {showBulkStudentModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-16 -mt-16"></div>
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <div>
+                <h3 className="text-2xl font-black text-text-heading">Bulk Student Import</h3>
+                <p className="text-sm text-text-sub font-medium">Add multiple students using JSON format.</p>
+              </div>
+              <button onClick={() => setShowBulkStudentModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2">
+              <div>
+                <label className="label-text">JSON Data (Paste list of student objects)</label>
+                <textarea 
+                  className="input-field min-h-[300px] font-mono text-[10px]" 
+                  placeholder='[{"Name": "Kevin Molsom", "student type": "OLD", "Class / Section": "2", "SECTION": "A", "ROLL NO": 1, ...}]'
+                  value={bulkStudentInput}
+                  onChange={(e) => setBulkStudentInput(e.target.value)}
+                />
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl flex flex-col gap-3">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Import Template</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <button 
+                    onClick={() => setBulkStudentInput(JSON.stringify([
+                      { "student type": "OLD", "Name": "Kevin Molsom", "Class / Section": "2", "SECTION": "A", "ROLL NO": 1, "D.O.B": "20/11/2018", "Father Name": "Ramesh Hari Molsom", "Mother Name": "Ramengi Molsom", "FATHERS PHONE No.": "9366556971", "Blood Group": "A+", "Address": "Chinta Kumar Para, P.O - Khasiamangal, P.S - Teliamura, Dist. - Khowai Tripura - 799205" },
+                      { "student type": "OLD", "Name": "Samuel Debbarma", "Class / Section": "2", "SECTION": "A", "ROLL NO": 2, "D.O.B": "19/06/2018", "Father Name": "Mrinal Debbarma", "Mother Name": "Sambhu Laxmi Debbarma", "FATHERS PHONE No.": "8787804909", "Blood Group": "B+", "Address": "Bahadur Sardar Para, P.O - Khasiamangal, P.S - Teliamura, Dist. - Khowai Tripura - 799205" }
+                    ], null, 2))}
+                    className="text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-primary/50 transition-all text-[10px] font-bold flex items-center justify-between group"
+                  >
+                    <span>Load Sample Data (Matching Image Columns)</span>
+                    <Plus size={12} className="text-slate-300 group-hover:text-primary transition-all" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6 shrink-0">
+              <button 
+                onClick={() => setShowBulkStudentModal(false)}
+                className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all uppercase tracking-widest text-xs"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const data = JSON.parse(bulkStudentInput);
+                    if (!Array.isArray(data)) throw new Error('Data must be an array');
+                    
+                    let successCount = 0;
+                    for (const s of data) {
+                      const studentPayload = {
+                        first_name: s.Name || s.name || '',
+                        surname: '',
+                        student_type: s["student type"] || s.studentType || 'OLD',
+                        academic_session: schoolProfile.currentSession || '2023-24',
+                        class_name: s["Class / Section"] || s.class || '',
+                        section_name: s["SECTION"] || s.section || '',
+                        roll_number: s["ROLL NO"] || s.rollNumber || '',
+                        date_of_birth: s["D.O.B"] || s.dob || '',
+                        father_name: s["Father Name"] || s.fatherName || '',
+                        mother_name: s["Mother Name"] || s.motherName || '',
+                        father_mobile: s["FATHERS PHONE No."] || s.fatherMobile || '',
+                        blood_group: s["Blood Group"] || s.bloodGroup || '',
+                        residential_address: s["Address"] || s.address || '',
+                        student_id: `STD-${Math.floor(100000 + Math.random() * 900000)}`,
+                        admission_date: new Date().toISOString().split('T')[0]
+                      };
+
+                      if (supabase) {
+                        const { error } = await supabase.from('students').insert([studentPayload]);
+                        if (!error) successCount++;
+                      } else {
+                        setStudents((prev: any) => [...prev, {
+                          id: Math.random().toString(36).substr(2, 9),
+                          studentId: studentPayload.student_id,
+                          name: studentPayload.first_name,
+                          surname: studentPayload.surname,
+                          studentType: studentPayload.student_type,
+                          session: studentPayload.academic_session,
+                          class: studentPayload.class_name,
+                          section: studentPayload.section_name,
+                          rollNumber: studentPayload.roll_number,
+                          dob: studentPayload.date_of_birth,
+                          fatherName: studentPayload.father_name,
+                          motherName: studentPayload.mother_name,
+                          fatherMobile: studentPayload.father_mobile,
+                          bloodGroup: studentPayload.blood_group,
+                          address: studentPayload.residential_address,
+                          admissionDate: studentPayload.admission_date
+                        }]);
+                        successCount++;
+                      }
+                    }
+
+                    alert(`Successfully imported ${successCount} students.`);
+                    setShowBulkStudentModal(false);
+                    setBulkStudentInput('');
+                    
+                    if (supabase) {
+                      const { data: studentsData } = await supabase.from('students').select('*');
+                      if (studentsData) {
+                        setStudents(studentsData.map((s: any) => ({
+                          id: s.id,
+                          studentId: s.student_id,
+                          name: s.first_name,
+                          surname: s.surname,
+                          studentType: s.student_type,
+                          class: s.class_name,
+                          section: s.section_name,
+                          rollNumber: s.roll_number,
+                          dob: s.date_of_birth,
+                          fatherName: s.father_name,
+                          motherName: s.mother_name,
+                          fatherMobile: s.father_mobile,
+                          bloodGroup: s.blood_group,
+                          address: s.residential_address,
+                          admissionDate: s.admission_date
+                        })));
+                      }
+                    }
+                  } catch (err) {
+                    alert('Invalid JSON data or error during import.');
+                  }
+                }}
+                className="flex-1 btn-primary py-4 shadow-xl shadow-primary/20 uppercase tracking-widest text-xs"
+              >
+                Process Student Import
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
@@ -18537,7 +19047,7 @@ const HostelModule = ({
   const [scanning, setScanning] = useState(false);
   
   // Form states
-  const [roomForm, setRoomForm] = useState<any>({ roomNumber: '', floor: '', capacity: 4, type: 'Non-AC', gender: 'Male', category: 'Standard', price: 0 });
+  const [roomForm, setRoomForm] = useState<any>({ hostelName: '', roomNumber: '', floor: '', capacity: 4, type: 'Non-AC', gender: 'Male', category: 'Standard', price: 0 });
   const [staffForm, setStaffForm] = useState<any>({ name: '', role: 'Warden', mobile: '', email: '', shift: 'Day' });
   const [enrollForm, setEnrollForm] = useState<any>({ studentId: '', roomId: '', bedId: '' });
   const [enrollSearch, setEnrollSearch] = useState('');
@@ -18632,6 +19142,7 @@ const HostelModule = ({
 
   const handleAddRoom = async () => {
     const payload = {
+      hostel_name: roomForm.hostelName,
       room_number: roomForm.roomNumber,
       floor: roomForm.floor,
       capacity: parseInt(roomForm.capacity as any) || 0,
@@ -18642,23 +19153,112 @@ const HostelModule = ({
     };
 
     if (supabase) {
+      const saveResiliently = async (data: any, isUpdate: boolean) => {
+        let attempt = 0;
+        const maxAttempts = 15;
+        let currentPayload = { ...data };
+        
+        if (!(window as any)._missing_room_columns) (window as any)._missing_room_columns = new Set();
+        const missingCols = (window as any)._missing_room_columns as Set<string>;
+
+        while (attempt < maxAttempts) {
+          // Remove columns we already identified as missing
+          Object.keys(currentPayload).forEach(key => {
+            if (missingCols.has(key)) delete currentPayload[key];
+          });
+
+          if (Object.keys(currentPayload).length === 0) {
+             return { error: { message: "No valid columns remain in payload to save.", code: "EMPTY_PAYLOAD" } };
+          }
+
+          try {
+            const request = isUpdate 
+              ? supabase.from('hostel_rooms').update(currentPayload).eq('id', roomForm.id)
+              : supabase.from('hostel_rooms').insert([currentPayload]);
+            
+            const { data: result, error } = await (isUpdate ? request.select() : request.select());
+
+            if (error) {
+              const errorMsg = error.message.toLowerCase();
+              if (error.code === 'PGRST204' || errorMsg.includes('schema cache') || errorMsg.includes('missing')) {
+                console.warn('Schema cache issue detected, attempting to reload and retry...');
+                try {
+                  await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+                } catch (rpcErr) {
+                  console.warn('Silent RPC error during reload:', rpcErr);
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                attempt++;
+                continue;
+              }
+              
+              if (errorMsg.includes('column')) {
+                const match = error.message.match(/column ['"](.*?)['"]/i) || error.message.match(/['"](.*?)['"] column/i);
+                if (match) {
+                  const missingCol = match[1];
+                  console.warn(`Removing missing column from room payload: ${missingCol}`);
+                  missingCols.add(missingCol);
+                  delete currentPayload[missingCol];
+                  attempt++;
+                  continue;
+                }
+              }
+              
+              if (errorMsg.includes('failed to fetch') || errorMsg.includes('network') || errorMsg.includes('too large') || errorMsg.includes('payload')) {
+                console.warn("Payload potentially too large or network error. Retrying...");
+                attempt++;
+                await new Promise(r => setTimeout(r, 1000));
+                continue;
+              }
+
+              return { error };
+            }
+            return { data: result, error: null };
+          } catch (e: any) {
+            console.error('Exception during save:', e);
+            const errorMsg = e.message?.toLowerCase() || '';
+            if (errorMsg.includes('schema cache') || errorMsg.includes('pgrst204') || errorMsg.includes('column')) {
+               try {
+                 await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+               } catch (rpcErr) {
+                 console.warn('Silent RPC error during reload:', rpcErr);
+               }
+               await new Promise(r => setTimeout(r, 1000));
+            }
+            attempt++;
+          }
+        }
+        return { error: { message: 'Max retries reached after schema issues' } };
+      };
+
       if (roomForm.id) {
-        const { error } = await supabase.from('hostel_rooms').update(payload).eq('id', roomForm.id);
+        const { error } = await saveResiliently(payload, true);
         if (error) {
           console.error('Error updating room:', error);
-          alert('Failed to update room');
+          alert('Failed to update room: ' + (error as any).message);
           return;
         }
-        setRooms(rooms.map((r: any) => r.id === roomForm.id ? { ...r, ...roomForm } : r));
+        setRooms(rooms.map((r: any) => r.id === roomForm.id ? { ...r, ...roomForm, 
+          hostelName: roomForm.hostelName,
+          roomNumber: roomForm.roomNumber,
+          price: roomForm.price,
+          type: roomForm.type
+        } : r));
       } else {
-        const { data: inserted, error } = await supabase.from('hostel_rooms').insert([payload]).select();
+        const { data: inserted, error } = await saveResiliently(payload, false);
         if (error) {
           console.error('Error saving room:', error);
-          alert('Failed to save room');
+          alert('Failed to save room: ' + (error as any).message);
           return;
         }
-        if (inserted) {
-          const newRoom = { ...inserted[0], roomNumber: inserted[0].room_number, price: inserted[0].price_per_month, type: inserted[0].room_type };
+        if (inserted && inserted[0]) {
+          const newRoom = { 
+            ...inserted[0], 
+            hostelName: inserted[0].hostel_name,
+            roomNumber: inserted[0].room_number, 
+            price: inserted[0].price_per_month, 
+            type: inserted[0].room_type 
+          };
           setRooms([...rooms, newRoom]);
           
           // Auto-create beds for the room
@@ -18687,7 +19287,7 @@ const HostelModule = ({
       }
     } else {
       if (roomForm.id) {
-        setRooms(rooms.map((r: any) => r.id === roomForm.id ? roomForm : r));
+        setRooms(rooms.map((r: any) => r.id === roomForm.id ? { ...r, ...roomForm } : r));
       } else {
         const newRoom = { ...roomForm, id: Date.now().toString() };
         setRooms([...rooms, newRoom]);
@@ -18704,7 +19304,7 @@ const HostelModule = ({
       }
     }
     setShowRoomModal(false);
-    setRoomForm({ roomNumber: '', floor: '', capacity: 4, type: 'Non-AC', gender: 'Male', category: 'Standard', price: 0 });
+    setRoomForm({ hostelName: '', roomNumber: '', floor: '', capacity: 4, type: 'Non-AC', gender: 'Male', category: 'Standard', price: 0 });
   };
 
   const handleAddStaff = async () => {
@@ -18748,6 +19348,18 @@ const HostelModule = ({
   };
 
   const handleEnrollStudent = async () => {
+    if (!enrollForm.studentId || !enrollForm.bedId) {
+      alert("Please select both a student and a bed.");
+      return;
+    }
+    
+    // Check if bed is still available
+    const b = beds.find((bed: any) => bed.id === enrollForm.bedId);
+    if (!b || b.status !== 'Available') {
+      alert("This bed is no longer available.");
+      return;
+    }
+
     if (supabase) {
       const { error } = await supabase
         .from('hostel_beds')
@@ -18874,6 +19486,12 @@ const HostelModule = ({
           <p className="text-text-sub font-medium">Manage rooms, beds, student enrollment, and attendance.</p>
         </div>
         <div className="flex gap-3">
+          <button 
+            onClick={() => (window as any).setShowBulkStaffModal(true)}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:scale-105 transition-all text-sm uppercase tracking-wider"
+          >
+            <Upload size={18} /> Bulk Staff
+          </button>
           <button 
             onClick={() => setShowRoomModal(true)}
             className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
@@ -19080,6 +19698,7 @@ const HostelModule = ({
               <Card key={room.id} className="overflow-hidden group">
                 <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
                   <div>
+                    {room.hostelName && <p className="text-[10px] font-black text-primary uppercase mb-1 tracking-widest">{room.hostelName}</p>}
                     <h3 className="text-2xl font-black tracking-tighter">ROOM {room.roomNumber}</h3>
                     <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">{room.floor} Floor · {room.type} · {room.category}</p>
                     <p className="text-xs font-black text-emerald-400 mt-1">₹{room.price} / Month</p>
@@ -19140,7 +19759,17 @@ const HostelModule = ({
                   <div className="flex gap-2 mt-4">
                     <button 
                       onClick={() => {
-                        setRoomForm(room);
+                        setRoomForm({
+                          id: room.id,
+                          hostelName: room.hostelName,
+                          roomNumber: room.roomNumber,
+                          floor: room.floor,
+                          capacity: room.capacity,
+                          type: room.type,
+                          gender: room.gender,
+                          category: room.category,
+                          price: room.price
+                        });
                         setShowRoomModal(true);
                       }}
                       className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-text-heading font-bold text-sm transition-all"
@@ -19477,6 +20106,7 @@ const HostelModule = ({
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
             <h3 className="text-2xl font-black text-text-heading mb-6">{roomForm.id ? 'Edit Room' : 'Add New Room'}</h3>
             <div className="space-y-4">
+              <Input label="Hostel Name" placeholder="e.g. Boys Hostel A" value={roomForm.hostelName || ''} onChange={(e: any) => setRoomForm({ ...roomForm, hostelName: e.target.value })} />
               <Input label="Room Number" value={roomForm.roomNumber || ''} onChange={(e: any) => setRoomForm({ ...roomForm, roomNumber: e.target.value })} />
               <Input label="Floor" value={roomForm.floor || ''} onChange={(e: any) => setRoomForm({ ...roomForm, floor: e.target.value })} />
               <div className="grid grid-cols-2 gap-4">
