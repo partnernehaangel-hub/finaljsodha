@@ -30,5 +30,24 @@ CREATE TABLE IF NOT EXISTS hostel_staff (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Verify hostel_attendance
+CREATE TABLE IF NOT EXISTS hostel_attendance (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id TEXT,
+    student_name TEXT,
+    room_number TEXT,
+    attendance_date DATE DEFAULT CURRENT_DATE,
+    status TEXT,
+    ip_address TEXT,
+    location TEXT,
+    marked_by TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Ensure all columns exist in hostel_attendance (for existing tables)
+ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS marked_by TEXT;
+ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS location TEXT;
+
 -- Refresh PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS hostel_attendance (
     status TEXT NOT NULL, -- Present, Absent, Late, Leave
     ip_address TEXT,
     location TEXT,
+    marked_by TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

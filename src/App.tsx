@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { 
   UserPlus, 
@@ -13841,6 +13841,17 @@ export default function App() {
           ALTER TABLE students ALTER COLUMN first_name DROP NOT NULL;
           ALTER TABLE students ALTER COLUMN surname DROP NOT NULL;
           
+          -- Fix legacy class/section blockers
+          DO $$ 
+          BEGIN 
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'students' AND column_name = 'class') THEN
+              EXECUTE 'ALTER TABLE students ALTER COLUMN "class" DROP NOT NULL';
+            END IF;
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'students' AND column_name = 'section') THEN
+              EXECUTE 'ALTER TABLE students ALTER COLUMN "section" DROP NOT NULL';
+            END IF;
+          END $$;
+          
           DO $$ 
           BEGIN 
             IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'students' AND column_name = 'name') THEN
@@ -13957,6 +13968,9 @@ export default function App() {
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Standard';
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS price_per_month NUMERIC DEFAULT 0;
           
+          ALTER TABLE hostel_attendance ADD COLUMN IF NOT EXISTS marked_by TEXT;
+          ALTER TABLE hostel_attendance ADD COLUMN IF NOT EXISTS ip_address TEXT;
+          ALTER TABLE hostel_attendance ADD COLUMN IF NOT EXISTS location TEXT;
           -- Sync legacy room_no with room_number if one is missing
           UPDATE hostel_rooms SET room_number = room_no WHERE room_number IS NULL AND room_no IS NOT NULL;
           UPDATE hostel_rooms SET room_no = room_number WHERE room_no IS NULL AND room_number IS NOT NULL;
@@ -14537,12 +14551,11 @@ const schoolMigrations = `
   });
 
   // Supabase Data Fetching
-  useEffect(() => {
-    const fetchAllData = async () => {
-      if (!supabase) return;
+  async function fetchAllData() {
+    if (!supabase) return;
 
-      // Fetch Users
-      try {
+    // Fetch Users
+    try {
         const { data: usersData } = await supabase.from('users').select('*');
         if (usersData && usersData.length > 0) {
           const formattedUsers = usersData.map(u => {
@@ -15129,10 +15142,11 @@ const schoolMigrations = `
         type: ce.event_type,
         color: ce.color
       })));
-    };
+  }
 
+  useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [supabase]);
 
   const [taxes, setTaxes] = useState(0);
   const [generatedCredentials, setGeneratedCredentials] = useState<any[]>([]);
@@ -15700,7 +15714,9 @@ const schoolMigrations = `
         student_type: formData.studentType || 'Old',
         academic_session: formData.session || schoolProfile.currentSession,
         class_name: formData.class,
+        class: formData.class,
         section_name: formData.section,
+        section: formData.section,
         roll_number: formData.rollNumber,
         caste: formData.caste,
         category: formData.category,

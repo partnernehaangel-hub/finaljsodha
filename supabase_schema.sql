@@ -577,6 +577,7 @@ CREATE TABLE IF NOT EXISTS hostel_attendance (
     status TEXT,
     ip_address TEXT,
     location TEXT,
+    marked_by TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -967,6 +968,14 @@ CREATE TABLE IF NOT EXISTS hostel_staff (
     shift TEXT DEFAULT 'Day',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Fix for missing columns in hostel_attendance table
+ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS marked_by TEXT;
+ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS location TEXT;
+
+-- Refresh PostgREST schema cache to make new columns visible immediately
+NOTIFY pgrst, 'reload schema';
 
 -- Refresh PostgREST schema cache
 NOTIFY pgrst, 'reload schema';
