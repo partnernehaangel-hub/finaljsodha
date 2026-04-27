@@ -360,7 +360,7 @@ CREATE TABLE IF NOT EXISTS staff (
 
 CREATE TABLE IF NOT EXISTS staff_leave_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    staff_id TEXT NOT NULL,
+    staff_id TEXT NOT NULL, -- Changed from UUID or strict FK to TEXT for resilience
     staff_name TEXT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
@@ -368,6 +368,14 @@ CREATE TABLE IF NOT EXISTS staff_leave_requests (
     status TEXT DEFAULT 'Pending',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure the constraint is relaxed if it was previously created as a strict foreign key
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'staff_leave_requests_staff_id_fkey') THEN
+        ALTER TABLE staff_leave_requests DROP CONSTRAINT staff_leave_requests_staff_id_fkey;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS staff_attendance (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -539,7 +547,9 @@ CREATE TABLE IF NOT EXISTS report_cards (
 -- Hostel Management
 CREATE TABLE IF NOT EXISTS hostel_rooms (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    room_number TEXT UNIQUE NOT NULL,
+    hostel_name TEXT,
+    room_number TEXT UNIQUE,
+    room_no TEXT,
     floor TEXT,
     category TEXT,
     price_per_month NUMERIC DEFAULT 0,
@@ -941,12 +951,22 @@ ON CONFLICT DO NOTHING;
 -- Run this in your Supabase SQL Editor to ensure all columns are present
 
 -- Ensure floor column exists in hostel_rooms
+ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS room_number TEXT;
+ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS room_no TEXT;
+ALTER TABLE IF EXISTS hostel_rooms ALTER COLUMN room_number DROP NOT NULL;
+ALTER TABLE IF EXISTS hostel_rooms ALTER COLUMN room_no DROP NOT NULL;
 ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS floor TEXT;
 ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS price_per_month NUMERIC DEFAULT 0;
 ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT 4;
 ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS room_type TEXT DEFAULT 'Non-AC';
 ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE IF EXISTS hostel_rooms ADD COLUMN IF NOT EXISTS hostel_name TEXT;
+UPDATE hostel_rooms SET room_number = room_no WHERE room_number IS NULL AND room_no IS NOT NULL;
+UPDATE hostel_rooms SET room_no = room_number WHERE room_no IS NULL AND room_number IS NOT NULL;
+
+-- Notify PostgREST to reload schema cache
+NOTIFY pgrst, 'reload schema';
 
 -- Verify hostel_beds
 CREATE TABLE IF NOT EXISTS hostel_beds (
@@ -978,6 +998,21 @@ ALTER TABLE IF EXISTS hostel_attendance ADD COLUMN IF NOT EXISTS location TEXT;
 NOTIFY pgrst, 'reload schema';
 
 -- Refresh PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
+-- Updated migration logic for Visitors
+ALTER TABLE IF EXISTS visitors ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE IF EXISTS visitors ADD COLUMN IF NOT EXISTS qualification TEXT;
+ALTER TABLE IF EXISTS visitors ADD COLUMN IF NOT EXISTS role TEXT;
+NOTIFY pgrst, 'reload schema';
+
+-- Updated migration logic for Staff Leave Requests
+DO $$ 
+BEGIN 
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'staff_leave_requests_staff_id_fkey') THEN
+    ALTER TABLE staff_leave_requests DROP CONSTRAINT staff_leave_requests_staff_id_fkey;
+  END IF;
+END $$;
 NOTIFY pgrst, 'reload schema';
 
 

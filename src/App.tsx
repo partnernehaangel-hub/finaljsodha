@@ -10346,7 +10346,7 @@ const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelA
   );
 };
 
-const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, designations, setDesignations, leaveRequests, setLeaveRequests, users, setUsers, masterData, setMasterData, currentUser }: any) => {
+const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, designations, setDesignations, leaveRequests, setLeaveRequests, users, setUsers, masterData, setMasterData, currentUser, showModal }: any) => {
   const [activeTab, setActiveTab] = useState('staff-list');
   const [showAddStaff, setShowAddStaff] = useState(false);
   const [showBulkStaffModal, setShowBulkStaffModal] = useState(false);
@@ -10395,7 +10395,14 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
     }
     
     try {
-      const staffId = editingStaff ? editingStaff.staffId : (newStaff.username || `STF-${Math.floor(100000 + Math.random() * 900000)}`);
+      const staffId = editingStaff 
+        ? (editingStaff.staffId || editingStaff.id) 
+        : (newStaff.username || `STF-${Math.floor(100000 + Math.random() * 900000)}`);
+      
+      if (!staffId) {
+        showModal('Error', 'Failed to generate a valid Staff ID. Please ensure the username is provided or the record has an ID.');
+        return;
+      }
       let staffPayload: any = {
         staff_id: staffId,
         name: newStaff.name,
@@ -10597,6 +10604,7 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
         const { error: userError } = await supabase
           .from('users')
           .insert([{
+            id: staffId,
             username: staffId,
             name: `${newStaff.name} ${newStaff.surname}`,
             password: newStaff.password || '123',
@@ -10837,7 +10845,7 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
               >
                 <option value="">Select Staff Member</option>
                 {staff.map((s: Staff) => (
-                  <option key={s.id} value={s.id}>{s.name} {s.surname} ({s.id})</option>
+                  <option key={s.id} value={s.staffId || s.id}>{s.name} {s.surname} ({s.staffId || s.id})</option>
                 ))}
               </select>
             </div>
@@ -10855,9 +10863,12 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
             </div>
             <button 
               onClick={async () => {
-                if (!newLeave.reason || !newLeave.staffId) return;
+                if (!newLeave.reason || !newLeave.staffId) {
+                  alert('Please select a staff member and provide a reason.');
+                  return;
+                }
                 try {
-                  const selectedStaff = staff.find((s: Staff) => s.id === newLeave.staffId);
+                  const selectedStaff = staff.find((s: Staff) => (s.staffId || s.id) === newLeave.staffId);
                   const staffName = selectedStaff ? `${selectedStaff.name} ${selectedStaff.surname}` : 'Unknown';
                   
                   const { data, error } = await supabase
@@ -12356,24 +12367,51 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
         setEditingVisitorId(null);
         alert('Visitor updated!');
       } else {
-        alert('Error updating visitor');
+        if (error.code === 'PGRST204' || error.message.toLowerCase().includes('schema cache')) {
+          try {
+            await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+          } catch (e) {}
+          alert('Database schema was outdated. We have requested a refresh. Please try saving again in a few seconds.');
+        } else {
+          alert('Error updating visitor: ' + error.message);
+        }
       }
     } else {
-      const { data, error } = await supabase
-        .from('visitors')
-        .insert([payload])
-        .select();
+      let finalData = null;
+      let finalError = null;
       
-      if (data && !error) {
+      // Try twice to handle potential schema cache issue
+      for (let i = 0; i < 2; i++) {
+        const { data, error } = await supabase
+          .from('visitors')
+          .insert([payload])
+          .select();
+        
+        if (error) {
+          finalError = error;
+          if (error.code === 'PGRST204' || error.message.toLowerCase().includes('schema cache')) {
+            try {
+              await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+          break;
+        }
+        finalData = data;
+        break;
+      }
+      
+      if (finalData && !finalError) {
         const savedVisitor = {
-          ...data[0],
-          inTime: data[0].in_time,
-          outTime: data[0].out_time
+          ...finalData[0],
+          inTime: finalData[0].in_time,
+          outTime: finalData[0].out_time
         };
         setVisitors([savedVisitor, ...visitors]);
         alert('Visitor added!');
       } else {
-        alert('Error adding visitor');
+        alert('Error adding visitor: ' + (finalError?.message || 'Unknown error'));
       }
     }
 
@@ -13884,9 +13922,73 @@ export default function App() {
           ALTER TABLE students ADD COLUMN IF NOT EXISTS emergency_contact TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS local_guardian_contact TEXT;
           ALTER TABLE students ADD COLUMN IF NOT EXISTS allergies TEXT;
+
+          CREATE TABLE IF NOT EXISTS leave_requests (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            student_id TEXT NOT NULL,
+            student_name TEXT,
+            startDate DATE NOT NULL,
+            endDate DATE NOT NULL,
+            reason TEXT,
+            status TEXT DEFAULT 'Pending',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure the constraint is relaxed if it was previously created as a strict foreign key
+          DO $$ 
+          BEGIN 
+              IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leave_requests_student_id_fkey') THEN
+                  ALTER TABLE leave_requests DROP CONSTRAINT leave_requests_student_id_fkey;
+              END IF;
+          END $$;
+
+          CREATE TABLE IF NOT EXISTS student_attendance (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            student_id TEXT NOT NULL,
+            student_name TEXT,
+            class_name TEXT,
+            section_name TEXT,
+            attendance_date DATE DEFAULT CURRENT_DATE,
+            status TEXT,
+            remarks TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
         `;
         
         const staffMigrations = `
+          CREATE TABLE IF NOT EXISTS staff_leave_requests (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            staff_id TEXT NOT NULL,
+            staff_name TEXT,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            reason TEXT,
+            status TEXT DEFAULT 'Pending',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          -- Ensure the constraint is relaxed if it was previously created as a strict foreign key
+          DO $$ 
+          BEGIN 
+              IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'staff_leave_requests_staff_id_fkey') THEN
+                  ALTER TABLE staff_leave_requests DROP CONSTRAINT staff_leave_requests_staff_id_fkey;
+              END IF;
+          END $$;
+
+          CREATE TABLE IF NOT EXISTS staff_attendance (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            staff_id TEXT NOT NULL,
+            staff_name TEXT,
+            role TEXT,
+            attendance_date DATE DEFAULT CURRENT_DATE,
+            attendance_time TIME DEFAULT CURRENT_TIME,
+            method TEXT,
+            status TEXT,
+            ip_address TEXT,
+            location TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb;
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS residential_address TEXT;
           ALTER TABLE staff ADD COLUMN IF NOT EXISTS login_id TEXT;
@@ -13961,6 +14063,11 @@ export default function App() {
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS hostel_name TEXT;
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_no TEXT;
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_number TEXT;
+          
+          -- Fix potential NOT NULL constraints that block resilient saving
+          ALTER TABLE IF EXISTS hostel_rooms ALTER COLUMN room_number DROP NOT NULL;
+          ALTER TABLE IF EXISTS hostel_rooms ALTER COLUMN room_no DROP NOT NULL;
+          
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS floor TEXT;
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT 4;
           ALTER TABLE hostel_rooms ADD COLUMN IF NOT EXISTS room_type TEXT DEFAULT 'Non-AC';
@@ -14270,6 +14377,27 @@ export default function App() {
           ALTER TABLE IF EXISTS exam_results ADD COLUMN IF NOT EXISTS subject TEXT;
         `;
 
+        const frontOfficeMigrations = `
+          CREATE TABLE IF NOT EXISTS visitors (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            name TEXT NOT NULL,
+            mobile TEXT NOT NULL,
+            role TEXT,
+            purpose TEXT,
+            qualification TEXT,
+            note TEXT,
+            date DATE DEFAULT CURRENT_DATE,
+            in_time TEXT,
+            out_time TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+
+          ALTER TABLE IF EXISTS visitors ADD COLUMN IF NOT EXISTS role TEXT;
+          ALTER TABLE IF EXISTS visitors ADD COLUMN IF NOT EXISTS qualification TEXT;
+          ALTER TABLE IF EXISTS visitors ADD COLUMN IF NOT EXISTS note TEXT;
+          NOTIFY pgrst, 'reload schema';
+        `;
+
         const reportCardMigrations = `
           CREATE TABLE IF NOT EXISTS report_card_templates (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -14359,6 +14487,12 @@ const schoolMigrations = `
           
           const { data: res5, error: err5 } = await supabase.rpc('exec_sql', { sql_query: feeMigrations });
           if (err5) console.error('Fee Migrations Error:', err5);
+
+          const { data: resHostel, error: errHostel } = await supabase.rpc('exec_sql', { sql_query: hostelMigrations });
+          if (errHostel) console.error('Hostel Migrations Error:', errHostel);
+
+          const { data: res6, error: err6 } = await supabase.rpc('exec_sql', { sql_query: frontOfficeMigrations });
+          if (err6) console.error('Front Office Migrations Error:', err6);
         } catch (migrationErr) {
           console.error('Migration execution failed:', migrationErr);
         }
@@ -17714,6 +17848,7 @@ const schoolMigrations = `
                   masterData={masterData}
                   setMasterData={setMasterData}
                   currentUser={currentUser}
+                  showModal={showModal}
                 />
               </motion.div>
             )}
@@ -19160,6 +19295,7 @@ const HostelModule = ({
     const payload = {
       hostel_name: roomForm.hostelName,
       room_number: roomForm.roomNumber,
+      room_no: roomForm.roomNumber, // Send both for compatibility
       floor: roomForm.floor,
       capacity: parseInt(roomForm.capacity as any) || 0,
       room_type: roomForm.type,
@@ -19171,7 +19307,7 @@ const HostelModule = ({
     if (supabase) {
       const saveResiliently = async (data: any, isUpdate: boolean) => {
         let attempt = 0;
-        const maxAttempts = 15;
+        const maxAttempts = 20; // Increased attempts
         let currentPayload = { ...data };
         
         if (!(window as any)._missing_room_columns) (window as any)._missing_room_columns = new Set();
@@ -19188,27 +19324,35 @@ const HostelModule = ({
           }
 
           try {
-            const request = isUpdate 
-              ? supabase.from('hostel_rooms').update(currentPayload).eq('id', roomForm.id)
-              : supabase.from('hostel_rooms').insert([currentPayload]);
-            
-            const { data: result, error } = await (isUpdate ? request.select() : request.select());
+            const { data: result, error } = await (isUpdate 
+              ? supabase.from('hostel_rooms').update(currentPayload).eq('id', roomForm.id).select()
+              : supabase.from('hostel_rooms').insert([currentPayload]).select());
 
             if (error) {
               const errorMsg = error.message.toLowerCase();
+              
+              // Handle Schema Cache Issues
               if (error.code === 'PGRST204' || errorMsg.includes('schema cache') || errorMsg.includes('missing')) {
-                console.warn('Schema cache issue detected, attempting to reload and retry...');
+                console.warn('Schema cache issue detected, attempting to reload...');
                 try {
                   await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
-                } catch (rpcErr) {
-                  console.warn('Silent RPC error during reload:', rpcErr);
+                } catch (e) {
+                  console.warn('Schema reload skipped:', e);
                 }
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(r => setTimeout(r, 2000)); // Longer wait for cache reload
                 attempt++;
+                
+                // Try to infer missing column from cache error message too
+                const m = error.message.match(/column ['"](.*?)['"]/i) || error.message.match(/['"](.*?)['"] column/i);
+                if (m && m[1]) {
+                  console.warn(`Identifying missing column from cache error: ${m[1]}`);
+                  missingCols.add(m[1]);
+                }
                 continue;
               }
               
-              if (errorMsg.includes('column')) {
+              // Handle explicit "column does not exist" errors
+              if (errorMsg.includes('column') || error.code === '42703') {
                 const match = error.message.match(/column ['"](.*?)['"]/i) || error.message.match(/['"](.*?)['"] column/i);
                 if (match) {
                   const missingCol = match[1];
@@ -19221,9 +19365,9 @@ const HostelModule = ({
               }
               
               if (errorMsg.includes('failed to fetch') || errorMsg.includes('network') || errorMsg.includes('too large') || errorMsg.includes('payload')) {
-                console.warn("Payload potentially too large or network error. Retrying...");
+                console.warn("Retrying due to potential network/payload issue...");
                 attempt++;
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1500));
                 continue;
               }
 
@@ -19232,16 +19376,8 @@ const HostelModule = ({
             return { data: result, error: null };
           } catch (e: any) {
             console.error('Exception during save:', e);
-            const errorMsg = e.message?.toLowerCase() || '';
-            if (errorMsg.includes('schema cache') || errorMsg.includes('pgrst204') || errorMsg.includes('column')) {
-               try {
-                 await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
-               } catch (rpcErr) {
-                 console.warn('Silent RPC error during reload:', rpcErr);
-               }
-               await new Promise(r => setTimeout(r, 1000));
-            }
             attempt++;
+            await new Promise(r => setTimeout(r, 1000));
           }
         }
         return { error: { message: 'Max retries reached after schema issues' } };
@@ -19454,24 +19590,53 @@ const HostelModule = ({
     };
 
     if (supabase) {
-      const { data, error } = await supabase
-        .from('hostel_attendance')
-        .insert([newRecord])
-        .select();
-      
-      if (error) {
-        console.error('Error saving hostel attendance:', error);
-        alert('Failed to save attendance to database');
+      // Improved resilient attendance save
+      let saveError = null;
+      let finalData = null;
+      let missingKeys = new Set<string>();
+
+      for (let i = 0; i < 5; i++) {
+        const payload: any = { ...newRecord };
+        missingKeys.forEach(k => delete payload[k]);
+
+        const { data, error } = await supabase
+          .from('hostel_attendance')
+          .insert([payload])
+          .select();
+
+        if (error) {
+          saveError = error;
+          const msg = error.message.toLowerCase();
+          if (error.code === 'PGRST204' || msg.includes('schema cache')) {
+            try {
+              await supabase.rpc('exec_sql', { sql_query: "NOTIFY pgrst, 'reload schema';" });
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+          if (msg.includes('column')) {
+            const m = error.message.match(/column "(.*?)"/i) || error.message.match(/column (.*?) /i);
+            if (m && m[1]) { missingKeys.add(m[1]); continue; }
+          }
+          break;
+        }
+        finalData = data;
+        break;
+      }
+
+      if (saveError && !finalData) {
+        console.error('Error saving hostel attendance:', saveError);
+        alert('Failed to save attendance: ' + saveError.message);
         return;
       }
 
-      if (data) {
+      if (finalData) {
         setAttendance([...attendance, { 
-          ...data[0], 
-          studentId: data[0].student_id, 
-          studentName: data[0].student_name,
-          roomNumber: data[0].room_number,
-          date: data[0].attendance_date,
+          ...finalData[0], 
+          studentId: finalData[0].student_id, 
+          studentName: finalData[0].student_name,
+          roomNumber: finalData[0].room_number,
+          date: finalData[0].attendance_date,
           isHostel: true 
         }]);
       }
